@@ -8,6 +8,8 @@ from .font_util import *
 class MeshGenerator():
     def __init__(self, fontFile, height:int, text:str, 
         bezierSteps = 4, extrude = 96, bevelRadius = 0, bevelSteps=4) -> None:
+
+        # properties
         self.fontFile = fontFile
         self.height = height
         self.text = text
@@ -15,6 +17,9 @@ class MeshGenerator():
         self.extrude = extrude
         self.bevelRadius = bevelRadius
         self.bevelSteps = bevelSteps
+
+        # records
+        self.outlinePoints = []
 
     def generateMesh(self):
         # init font
@@ -40,9 +45,12 @@ class MeshGenerator():
             kerning = self.face.get_kerning(self.previous, c)
             self.offset += kerning.x
 
+        # outline
         v = Vectoriser(self.face.glyph.outline, self.bezierSteps, reverse=False)
         for contour_index in range(len(v.contourList)):
             contour = v.contourList[contour_index]
+
+            self.outlinePoints.extend([e.tolist() for e in contour.pointList])
 
             if contour.clockwise:
                 outer_contour_points = contour.pointList

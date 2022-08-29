@@ -25,6 +25,7 @@ except:
 
 
 from .param import EXTENSION_ROOT 
+from .flow.flow_generate import FlowGenerator
 
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
@@ -44,6 +45,8 @@ class MyExtension(omni.ext.IExt):
                 ui.Label("Some Label")
                 ui.Button("Generate Font Test", clicked_fn=self.generateFont)
                 ui.Button("Generate Fire", clicked_fn=self.generateFire)
+                ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
+                
 
     def on_shutdown(self):
         print("[omni.flaming.font] omni.flaming.font shutdown")
@@ -60,64 +63,24 @@ class MyExtension(omni.ext.IExt):
         self.mg.generateMesh()
         self.mg.saveMesh(mesh_file)
         print("mesh generated")
+
+    def addFont3DModel(self):
+        print("add font 3d model")
+        # load robot
+        self.stage = omni.usd.get_context().get_stage()
+        font_prim = self.stage.GetPrimAtPath("/World/font3d")
+        if not font_prim.IsValid():
+            font_prim = self.stage.DefinePrim("/World/font3d")
+        
+        font_model_path = os.path.join(EXTENSION_ROOT, "temp", "test1.obj")
+        print("add robot at path: ", font_model_path)
+        success_bool = font_prim.GetReferences().AddReference(font_model_path)
     
     def generateFire(self):
         print("generate fire!")
 
         # constant
-        vel_vec = Gf.Vec3f(10.0, 0.0, 0.0)
-        buoyancyPerTemp =  6.0
-        forceScale = 3.0
-
-        # omni.kit.commands.execute("FlowCreatePreset", path="/World/Xform", layer=1, menu_item="FireEffect", emitter_only=False)
-        # omni.kit.commands.execute("FlowCreatePreset", path="/World/Xform_01", layer=1, menu_item="FireEffect", emitter_only=True)
-        
-
-
-
-        path = "/World/Xform"
-        stage = omni.usd.get_context().get_stage()
-        flowSimulate_prim_path = omni.usd.get_stage_next_free_path(stage, path + "/flowSimulate", False)
-        flowOffscreen_prim_path = omni.usd.get_stage_next_free_path(stage, path + "/flowOffscreen", False)
-        flowRender_prim_path = omni.usd.get_stage_next_free_path(stage, path + "/flowRender", False)
-
-        successful, (emitter, simulate, offscreen, renderer, advection) = omni.kit.commands.execute("FlowCreateBasicEffect", path=path, layer=1)
-        print("successful", successful, emitter.GetPath().pathString)
-
-        _, smoke = omni.kit.commands.execute("FlowCreatePrim", prim_path=flowSimulate_prim_path + "/advection/smoke", type_name="FlowAdvectionChannelParams")
-        _, vorticity = omni.kit.commands.execute("FlowCreatePrim", prim_path=flowSimulate_prim_path + "/vorticity", type_name="FlowVorticityParams")
-
-        (success, colormap) = omni.kit.commands.execute("FlowCreatePrim", prim_path=flowOffscreen_prim_path + "/colormap", type_name="FlowRayMarchColormapParams")
-
-
-        if success and colormap:
-            rgbaPoints = []
-            rgbaPoints.append(Gf.Vec4f(0.0154, 0.0177, 0.0154, 0.004902))
-            rgbaPoints.append(Gf.Vec4f(0.03575, 0.03575, 0.03575, 0.504902))
-            rgbaPoints.append(Gf.Vec4f(0.03575, 0.03575, 0.03575, 0.504902))
-            rgbaPoints.append(Gf.Vec4f(1, 0.1594, 0.0134, 0.8))
-            rgbaPoints.append(Gf.Vec4f(13.53, 2.99, 0.12599, 0.8))
-            rgbaPoints.append(Gf.Vec4f(78, 39, 6.1, 0.7))
-            colormap.CreateAttribute("rgbaPoints", Sdf.ValueTypeNames.Float4Array, False).Set(rgbaPoints)
-
-        
-        emitter.CreateAttribute("temperature", Sdf.ValueTypeNames.Float, False).Set(2.0)
-        emitter.CreateAttribute("coupleRateTemperature", Sdf.ValueTypeNames.Float, False).Set(10.0)
-        emitter.CreateAttribute("velocity", Sdf.ValueTypeNames.Float3, False).Set(vel_vec)
-
-        advection.CreateAttribute("buoyancyPerTemp", Sdf.ValueTypeNames.Float, False).Set(buoyancyPerTemp)
-
-        smoke.CreateAttribute("fade", Sdf.ValueTypeNames.Float, False).Set(2.0)
-
-        vorticity.CreateAttribute("forceScale", Sdf.ValueTypeNames.Float, False).Set(forceScale)
-
-        emitter_only = True
-        if emitter_only:
-            omni.kit.commands.execute("DeletePrims", paths=[flowSimulate_prim_path])
-            omni.kit.commands.execute("DeletePrims", paths=[flowOffscreen_prim_path])
-            omni.kit.commands.execute("DeletePrims", paths=[flowRender_prim_path])
-
-        ###### flaming font ####################
-        emitter.CreateAttribute("radius", Sdf.ValueTypeNames.Float, False).Set(20.0)
-# main
-print("hello")
+        self.fg = FlowGenerator()
+        # self.fg.setEmitterPositions(self.mg.outlinePoints)
+        # print("outlinePoints", self.mg.outlinePoints)
+        self.fg.generateFireAtPoint([0, 0, 0])
