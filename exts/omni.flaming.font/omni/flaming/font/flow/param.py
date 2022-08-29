@@ -2,6 +2,6 @@
 
 FIRE_CONFIG = {
     "velocity": [0, 0 ,0],
-    "buoyancyPerTemp": 6,
+    "buoyancyPerTemp": 1.0,
     "forceScale": 3.0
 }

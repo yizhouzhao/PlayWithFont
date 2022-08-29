@@ -1,7 +1,8 @@
 # util
 from shapely import geometry
 from shapely.geometry import Polygon, Point
-from shapely.ops import triangulate
+from shapely.prepared import prep
+
 import triangle as tr
 import numpy as np
 
@@ -41,39 +42,59 @@ def triangulate_contour(outer_contour_points, inner_contour_points_list):
 
 
 
-
-
-
-def triangulate_within(polygon):
-    return [triangle for triangle in triangulate(polygon) if triangle.covered_by(polygon)]
-
-def shirnk_contour(contour:list, step, is_exterior = True, scale = 10000):
+def intepolate_outline(outlines: list, max_step: float = 30):
     """
-    shrink contour: a list of points
+    Intepolate outline by a maximum step:
     """
-    polygon = Polygon(contour)
-    new_contour = []
+    is_outline_list = []
+    point_list = []
+    for outline in outlines:
+        for i in range(len(outline)):
+            p1 = outline[i]
+            p2 = outline[(i + 1) % len(outline)]
 
-    center = np.mean(contour, axis = 0)
-    print("center", center)
-    for point in contour:
-        center_to_point = (point[0] - center[0], point[1] - center[1])
-        center_to_point_norm = np.sqrt(center_to_point[0] ** 2 + center_to_point[1] ** 2 + 1e-6)
-        center_to_point = (center_to_point[0] / center_to_point_norm, center_to_point[1] / center_to_point_norm)
-        print("center_to_point", center_to_point)
-        new_point = Point(center_to_point[0] * step + point[0], center_to_point[1] * step + point[1])
+            outline_points = intepolate_two_points(p1, p2, max_step)
 
-        scale = scale * step
-        if is_exterior:
-            if not new_point.within(polygon):
-                new_contour.append([center_to_point[0] * scale  + point[0], center_to_point[1] * scale + point[1]])
-            else:
-                new_contour.append([-center_to_point[0] * scale + point[0], -center_to_point[1] * scale + point[1]])
-        else:
-            if new_point.within(polygon):
-                new_contour.append([center_to_point[0] * scale + point[0], center_to_point[1] * scale + point[1]])
-            else:
-                new_contour.append([-center_to_point[0] * scale + point[0], -center_to_point[1] * scale + point[1]])
+            point_list.extend(outline_points)
+            is_outline_list.extend([True] + [False] * (len(outline_points) - 1))
 
-        
-    return new_contour
+    return point_list, is_outline_list
+
+def intepolate_two_points(p1, p2, max_step: float):
+    """
+    Intepolate two points by a maximum step:
+    """
+    point1 = np.array(p1)
+    point2 = np.array(p2)
+
+    n = 1
+    while np.linalg.norm(point1 - point2) / n >= max_step:
+        n += 1
+
+    point_list = []
+    for i in range(n):
+        p = (1 - i / n) * point1 + (i / n) * point2
+        point_list.append(p.tolist())
+
+    return point_list
+
+    
+def grid_points_inside_polygon(polygon: Polygon, grid_size: int):
+    """
+    Generate points inside the polygon
+    """
+    latmin, lonmin, latmax, lonmax = polygon.bounds
+    
+    # resolution_lat = int((latmax - latmin) / grid_size)
+    # resolution_lon = int((lonmax - lonmin) / grid_size)
+    # print("resolution_lat", resolution_lat, resolution_lon)
+    # create prepared polygon
+    prep_polygon = prep(polygon)
+
+    # construct a rectangular mesh
+    points = []
+    for lat in np.arange(latmin, latmax, grid_size):
+        for lon in np.arange(lonmin, lonmax, grid_size):
+            points.append(Point((round(lat,4), round(lon,4))))
+
+    return [(p.x, p.y) for p in filter(prep_polygon.contains, points)]
