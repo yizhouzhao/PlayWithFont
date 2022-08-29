@@ -16,7 +16,7 @@ class MeshGenerator():
         self.bevelRadius = bevelRadius
         self.bevelSteps = bevelSteps
 
-    def generateMesh(self, mesh_file = "test0.obj"):
+    def generateMesh(self):
         # init font
         self.face = Face(self.fontFile)
         self.face.set_char_size(self.height << 6, self.height << 6, 96, 96)
@@ -29,6 +29,7 @@ class MeshGenerator():
         for c in self.text:
             self.AddCharacter(c)
 
+    def saveMesh(self, mesh_file = "test0.obj"):
         self.mesh.saveOBJ(mesh_file)
         
     def AddCharacter(self, c):
