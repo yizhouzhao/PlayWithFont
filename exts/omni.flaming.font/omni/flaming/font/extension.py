@@ -5,6 +5,9 @@ from pxr import Gf, Sdf
 
 import os
 
+
+
+################################ pip install dependencies ####################################
 try:
     import shapely
 except:
@@ -23,10 +26,12 @@ except:
     omni.kit.pipapi.install("triangle")
     import triangle
 
-
+################################ flaming font import ####################################
 from .param import EXTENSION_ROOT 
+from .font.font_create import MeshGenerator
 from .flow.flow_generate import FlowGenerator
 from .fluid.fluid_generate import FluidGenerator
+from .formable.deformable_generate import DeformableBodyGenerator
 
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
@@ -48,13 +53,15 @@ class MyExtension(omni.ext.IExt):
         self._window = ui.Window("My Window", width=300, height=300)
         with self._window.frame:
             with ui.VStack():
-                ui.Label("Some Label")
+                self.input_text_ui = ui.StringField(height=20, style={ "margin_height": 2})
+                self.input_text_ui.model.set_value("Los Ángeles")
                 ui.Button("Generate Font Test", clicked_fn=self.generateFont)
                 ui.Button("Generate Fire", clicked_fn=self.generateFire)
                 ui.Button("Generate Fluid", clicked_fn=self.generateFluid)
+                ui.Button("Generate Deformable Body", clicked_fn=self.generateDeformbable)
+                ui.Spacer(height = 20)
                 ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
                 
-
     def on_shutdown(self):
         print("[omni.flaming.font] omni.flaming.font shutdown")
 
@@ -67,30 +74,33 @@ class MyExtension(omni.ext.IExt):
         if self.mesh_generator:
             self.mesh_generator.shutdown()
 
-    
     def generateFont(self):
         print("generateFont!")
 
-        from .font.font_create import MeshGenerator
         font_file = os.path.join(EXTENSION_ROOT, 'fonts', 'LXGWClearGothic-Book.ttf')
     
-        mesh_file = os.path.join(EXTENSION_ROOT, "temp", "test1.obj")
-        self.mesh_generator = MeshGenerator(font_file, height = 48, text = "Hello", extrude=768) 
-        self.mesh_generator.generateMesh(create_obj = False)
-        # self.mg.saveMesh(mesh_file)
+        input_text = self.input_text_ui.model.get_value_as_string()
+
+        mesh_file = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
+        self.mesh_generator = MeshGenerator(font_file, height = 48, text = input_text, extrude=768) 
+        self.mesh_generator.generateMesh(create_obj = True)
+        self.mesh_generator.saveMesh(mesh_file)
         
         print("mesh polygons", self.mesh_generator.offsets)
         print("mesh generated")
 
     def addFont3DModel(self, scale = 10):
         print("add font 3d model")
-        # load robot
+
         self.stage = omni.usd.get_context().get_stage()
-        font_prim = self.stage.GetPrimAtPath("/World/font3d")
+
+        input_text = self.input_text_ui.model.get_value_as_string()
+
+        font_prim = self.stage.GetPrimAtPath(f"/World/font3d_{input_text}")
         if not font_prim.IsValid():
-            font_prim = self.stage.DefinePrim("/World/font3d")
+            font_prim = self.stage.DefinePrim(f"/World/font3d_{input_text}")
         
-        font_model_path = os.path.join(EXTENSION_ROOT, "temp", "test1.obj")
+        font_model_path = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
         print("add robot at path: ", font_model_path)
         success_bool = font_prim.GetReferences().AddReference(font_model_path)
 
@@ -144,3 +154,14 @@ class MyExtension(omni.ext.IExt):
 
         self.fluid_generator = FluidGenerator()
         self.fluid_generator.setPartclePositions(grid_points, radius=3.0)
+
+    def generateDeformbable(self):
+        print("generateDeformbable")
+        self.stage = omni.usd.get_context().get_stage()
+        self.deformable_generator = DeformableBodyGenerator()
+
+        selection = omni.usd.get_context().get_selection()
+        if selection:
+            paths = selection.get_selected_prim_paths()
+            first_selected_prim = self.stage.GetPrimAtPath(paths[0])
+            self.deformable_generator.setDeformableBodyToPrim(first_selected_prim)

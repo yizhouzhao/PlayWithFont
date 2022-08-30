@@ -25,7 +25,7 @@ class FluidGenerator():
         physx.overwrite_gpu_setting(1)
         physx.reset_simulation()
 
-    def setPartclePositions(self, points, scale = 10, radius = 3.0):
+    def setPartclePositions(self, points, scale = 10, radius = 3.0, max_velocity = 50.0):
         """
         Add particles at points
         """
@@ -74,7 +74,7 @@ class FluidGenerator():
         velocities = Vt.Vec3fArray(velocities_list)
 
         # enable isosurface
-        self.enable_isosurface()
+        self.enable_isosurface(max_velocity=max_velocity)
         
         particleUtils.add_physx_particleset_pointinstancer(
             stage=self.stage,
