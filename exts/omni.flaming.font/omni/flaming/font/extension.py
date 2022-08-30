@@ -40,6 +40,11 @@ class MyExtension(omni.ext.IExt):
         # enable flow in rendering
         omni.kit.commands.execute("ChangeSetting", path="rtx/flow/enabled", value=True)
 
+        # component
+        self.mesh_generator = None
+        self.flow_generator = None
+        self.fluid_generator = None
+
         self._window = ui.Window("My Window", width=300, height=300)
         with self._window.frame:
             with ui.VStack():
@@ -53,6 +58,15 @@ class MyExtension(omni.ext.IExt):
     def on_shutdown(self):
         print("[omni.flaming.font] omni.flaming.font shutdown")
 
+        if self.fluid_generator:
+            self.fluid_generator.shutdown()
+        
+        if self.flow_generator:
+            self.flow_generator.shutdown()
+        
+        if self.mesh_generator:
+            self.mesh_generator.shutdown()
+
     
     def generateFont(self):
         print("generateFont!")
@@ -61,11 +75,11 @@ class MyExtension(omni.ext.IExt):
         font_file = os.path.join(EXTENSION_ROOT, 'fonts', 'LXGWClearGothic-Book.ttf')
     
         mesh_file = os.path.join(EXTENSION_ROOT, "temp", "test1.obj")
-        self.mg = MeshGenerator(font_file, height = 48, text = "Hello", extrude=768) 
-        self.mg.generateMesh(create_obj = False)
+        self.mesh_generator = MeshGenerator(font_file, height = 48, text = "Hello", extrude=768) 
+        self.mesh_generator.generateMesh(create_obj = False)
         # self.mg.saveMesh(mesh_file)
         
-        print("mesh polygons", self.mg.offsets)
+        print("mesh polygons", self.mesh_generator.offsets)
         print("mesh generated")
 
     def addFont3DModel(self, scale = 10):
@@ -88,7 +102,7 @@ class MyExtension(omni.ext.IExt):
         # constant
         self.flow_generator = FlowGenerator()
 
-        all_points, is_outline = self.mg.getOutlinePoints(max_step=50)
+        all_points, is_outline = self.mesh_generator.getOutlinePoints(max_step=50)
         self.flow_generator.setEmitterPositions(all_points)
         print("outlinePoints", len(self.flow_generator.emitter_positions), self.flow_generator.emitter_positions[0])
 
@@ -125,8 +139,8 @@ class MyExtension(omni.ext.IExt):
     def generateFluid(self):
         print("generateFluid")
 
-        grid_points = self.mg.getGridPointsInside(grid_size = 10)
-        print("grid_points", grid_points)
+        grid_points = self.mesh_generator.getGridPointsInside(grid_size = 40)
+        print("grid_points", len(grid_points), grid_points)
 
         self.fluid_generator = FluidGenerator()
-        self.fluid_generator.setPartclePositions(grid_points)
+        self.fluid_generator.setPartclePositions(grid_points, radius=3.0)

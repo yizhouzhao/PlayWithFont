@@ -118,3 +118,9 @@ class FlowGenerator():
         ###### flaming font ####################
         emitter.CreateAttribute("radius", Sdf.ValueTypeNames.Float, False).Set(radius)
 
+
+    def shutdown(self):
+        """
+        Destructor
+        """
+        self.emitter_positions = None

@@ -93,8 +93,12 @@ def grid_points_inside_polygon(polygon: Polygon, grid_size: int):
 
     # construct a rectangular mesh
     points = []
-    for lat in np.arange(latmin, latmax, grid_size):
-        for lon in np.arange(lonmin, lonmax, grid_size):
+    
+    for lat in range(int(latmin), int(latmax) + grid_size, grid_size):
+        for lon in range(int(lonmin), int(lonmax), grid_size):
             points.append(Point((round(lat,4), round(lon,4))))
+    
+    filtered_points = [(p.x, p.y) for p in filter(prep_polygon.covers, points)]
+    # print("len filtered_points", len(filtered_points))
 
-    return [(p.x, p.y) for p in filter(prep_polygon.contains, points)]
+    return filtered_points

@@ -19,9 +19,16 @@ class MeshGenerator():
         self.bevelSteps = bevelSteps
 
         # records
+        self.mesh = None
         self.outlines = []
         self.polygons = []
         self.offsets = []
+    
+    def shutdown(self):
+        self.mesh = None
+        self.outlines = None
+        self.polygons = None
+        self.offsets = None
 
     def generateMesh(self, create_obj = True):
         """
