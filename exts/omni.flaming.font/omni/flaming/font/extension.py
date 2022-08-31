@@ -1,7 +1,7 @@
 import omni
 import omni.ext
 import omni.ui as ui
-from pxr import Gf, Sdf
+from pxr import Gf, Sdf, UsdGeom
 
 import os
 
@@ -33,6 +33,12 @@ from .flow.flow_generate import FlowGenerator
 from .fluid.fluid_generate import FluidGenerator
 from .formable.deformable_generate import DeformableBodyGenerator
 
+from .util.scene import *
+
+################################# flaming font ui #######################################
+from  .ui.style import julia_modeler_style
+from .ui.custom_ui_widget import *
+
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
 # on_shutdown() is called.
@@ -50,18 +56,45 @@ class MyExtension(omni.ext.IExt):
         self.flow_generator = None
         self.fluid_generator = None
 
-        self._window = ui.Window("My Window", width=300, height=300)
+        # stage
+        self.stage = omni.usd.get_context().get_stage()
+        UsdGeom.SetStageUpAxis(self.stage, UsdGeom.Tokens.y)
+        
+        # build windows
+        self.build_setup_layout_window()
+
+    def build_setup_layout_window(self):
+        # window
+        
+        self._window = ui.Window("omni.flaming.font", width=300)
         with self._window.frame:
-            with ui.VStack():
-                self.input_text_ui = ui.StringField(height=20, style={ "margin_height": 2})
-                self.input_text_ui.model.set_value("Los Ángeles")
-                ui.Button("Generate Font Test", clicked_fn=self.generateFont)
-                ui.Button("Generate Fire", clicked_fn=self.generateFire)
-                ui.Button("Generate Fluid", clicked_fn=self.generateFluid)
-                ui.Button("Generate Deformable Body", clicked_fn=self.generateDeformbable)
-                ui.Spacer(height = 20)
-                ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
-                
+            self._window.frame.style = julia_modeler_style
+            with ui.ScrollingFrame():
+                with ui.VStack():
+                    self.input_text_ui = ui.StringField(height=20, style={ "margin_height": 2})
+                    self.input_text_ui.model.set_value("Los Ángeles")
+                    ui.Button("Generate Font Test", clicked_fn=self.generateFont)
+                    ui.Button("Generate Fire", clicked_fn=self.generateFire)
+                    ui.Button("Generate Fluid", clicked_fn=self.generateFluid)
+                    ui.Button("Generate Deformable Body", clicked_fn=self.generateDeformbable)
+                    ui.Spacer(height = 20)
+                    ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
+
+                    ui.Spacer(height = 10)
+                    ui.Line(style_type_name_override="HeaderLine")
+                    with ui.CollapsableFrame("SCENE UTILITY"):
+                        with ui.VStack(height=0, spacing=4):
+                            ui.Line(style_type_name_override="HeaderLine")
+
+                            # open a new stage
+                            ui.Button("New scene", height = 40, name = "load_button", clicked_fn=lambda : omni.kit.window.file.new(), style={ "margin": 4}, tooltip = "open a new empty stage")
+                            # ground plan
+                            CustomBoolWidget(label="Add ground:", default_value=False, on_checked_fn = toggle_ground_plane) 
+                            
+                            # light intensity
+                            CustomSliderWidget(min=0, max=3000, label="Light intensity:", default_val=1000, on_slide_fn = change_light_intensity)
+                        
+                            
     def on_shutdown(self):
         print("[omni.flaming.font] omni.flaming.font shutdown")
 
@@ -101,7 +134,6 @@ class MyExtension(omni.ext.IExt):
             font_prim = self.stage.DefinePrim(f"/World/font3d_{input_text}")
         
         font_model_path = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
-        print("add robot at path: ", font_model_path)
         success_bool = font_prim.GetReferences().AddReference(font_model_path)
 
         font_prim.GetAttribute("xformOp:scale").Set((scale, scale,  scale))
