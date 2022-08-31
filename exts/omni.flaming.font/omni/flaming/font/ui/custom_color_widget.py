@@ -81,6 +81,9 @@ class CustomColorWidget(CustomBaseWidget):
         if self.revert_img:
             self._on_value_changed()
 
+    def get_color_stringfield(self):
+        return self.__strfield.model.get_value_as_string()
+
     def set_color_widget(self, str_model: ui.SimpleStringModel,
                          children: List[ui.AbstractItem]):
         """Parse the new StringField value and set the ui.ColorWidget
@@ -112,6 +115,9 @@ class CustomColorWidget(CustomBaseWidget):
             self.__strfield.model.set_value(field_str)
             self.revert_img.enabled = False
 
+            children=self.color_model.get_item_children()
+            self.set_color_widget(self.__strfield.model, children)
+
     def _build_body(self):
         """Main meat of the widget.  Draw the colorpicker, stringfield, and
         set up callbacks to keep them updated.
@@ -127,7 +133,7 @@ class CustomColorWidget(CustomBaseWidget):
                     height=BLOCK_HEIGHT,
                     name=COLOR_WIDGET_NAME
                 )
-                color_model = self.existing_model
+                self.color_model = self.existing_model
             else:
                 # the user provided a list of default values
                 self.__colorpicker = ui.ColorWidget(
@@ -136,15 +142,15 @@ class CustomColorWidget(CustomBaseWidget):
                     height=BLOCK_HEIGHT,
                     name=COLOR_WIDGET_NAME
                 )
-                color_model = self.__colorpicker.model
+                self.color_model = self.__colorpicker.model
 
-            self.__strfield = ui.StringField(width=FIELD_WIDTH, name="attribute_color")
+            self.__strfield = ui.StringField(width=FIELD_WIDTH, name="attribute_color", enabled = False)
             self.__color_sub = self.__colorpicker.model.subscribe_item_changed_fn(
-                lambda m, _, children=color_model.get_item_children():
+                lambda m, _, children=self.color_model.get_item_children():
                     self.set_color_stringfield(m, children))
-            self.__strfield_sub = self.__strfield.model.subscribe_value_changed_fn(
-                lambda m, children=color_model.get_item_children():
-                    self.set_color_widget(m, children))
+            # self.__strfield_sub = self.__strfield.model.subscribe_value_changed_fn(
+            #     lambda m, children=color_model.get_item_children():
+            #         self.set_color_widget(m, children))
             # show data at the start
             self.set_color_stringfield(self.__colorpicker.model,
-                                       children=color_model.get_item_children())
+                                       children=self.color_model.get_item_children())

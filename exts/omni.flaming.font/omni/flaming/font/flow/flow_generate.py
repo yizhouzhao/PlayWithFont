@@ -5,9 +5,9 @@ from pxr import Sdf, Gf, UsdGeom
 from .param import FIRE_CONFIG
 
 class FlowGenerator():
-    def __init__(self, flow_type = "Fire", layer = 1) -> None:
+    def __init__(self, layer = 1) -> None:
         self.emitter_positions = []
-        self.flow_type = flow_type
+        self.flow_type = "Fire"
         self.layer = layer
 
         # stage
@@ -17,6 +17,9 @@ class FlowGenerator():
             self.flow_config = FIRE_CONFIG
 
         self._enable_flowusd_api()
+
+    def set_flow_type(self, flow_type = "Fire"):
+        self.flow_type = flow_type
 
     def _enable_flowusd_api(self, target_blocks = 32768):
         """
@@ -44,7 +47,18 @@ class FlowGenerator():
             points: list of (x, y)
         """ 
         self.emitter_positions = [[p[0] / scale, p[1] / scale] for p in points] 
-    
+
+    def generateSmokeAtPoint(self, point, flow_path_str = "/World/Xform", radius = 10.0, emitter_only = False):
+        stage = omni.usd.get_context().get_stage()
+        flowSimulate_prim_path = omni.usd.get_stage_next_free_path(stage, flow_path_str + "/flowSimulate", False)
+        flowOffscreen_prim_path = omni.usd.get_stage_next_free_path(stage, flow_path_str + "/flowOffscreen", False)
+        flowRender_prim_path = omni.usd.get_stage_next_free_path(stage, flow_path_str + "/flowRender", False)
+
+        # batch up the sub-commands and functions that create prims
+        # this will raise an error if any failed, causing the rest to roll back, to avoid a half setup state
+
+        omni.kit.commands.execute("FlowCreateBasicEffect", path=flow_path_str, layer=self.layer),
+ 
     def generateFireAtPoint(self, point, flow_path_str = "/World/Xform", radius = 10.0, emitter_only = False):
         """
         Generate fire at point with size
@@ -82,7 +96,7 @@ class FlowGenerator():
             forceScale = self.flow_config["forceScale"]
             successful, (emitter, simulate, offscreen, renderer, advection) = omni.kit.commands.execute("FlowCreateBasicEffect", path=path, layer=self.layer)
             # print("successful", successful, emitter.GetPath().pathString)
-
+            
             smoke = self.stage.DefinePrim(flowSimulate_prim_path + "/advection/smoke", "FlowAdvectionChannelParams")
             vorticity = self.stage.DefinePrim(flowSimulate_prim_path + "/vorticity", "FlowVorticityParams")
             

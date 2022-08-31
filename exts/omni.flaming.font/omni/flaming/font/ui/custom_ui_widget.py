@@ -3,45 +3,28 @@ from typing import List, Optional
 import omni
 import omni.ui as ui
 
-from .style import ATTR_LABEL_WIDTH, cl, fl
+from .style import ATTR_LABEL_WIDTH, BLOCK_HEIGHT, cl, fl
 from .custom_base_widget import CustomBaseWidget
 
 SPACING = 5  
 
-class TaskTypeComboboxWidget():
+class CustomComboboxWidget(CustomBaseWidget):
     """A customized combobox widget"""
 
     def __init__(self,
                  model: ui.AbstractItemModel = None,
                  options: List[str] = None,
                  default_value=0,
-                 on_restore_fn: callable = None,
                  **kwargs):
-        """
-        Set up the take type combo box widget
-        ::params:
-            :on_restore_fn: call when write/restore the widget
-        """
         self.__default_val = default_value
         self.__options = options or ["1", "2", "3"]
         self.__combobox_widget = None
-        self.on_restore_fn = on_restore_fn
 
         # Call at the end, rather than start, so build_fn runs after all the init stuff
-        # CustomBaseWidget.__init__(self, model=model, **kwargs)
-
-        self.existing_model: Optional[ui.AbstractItemModel] = kwargs.pop("model", None)
-        self.revert_img = None
-        self.__attr_label: Optional[str] = kwargs.pop("label", "")
-        self.__frame = ui.Frame()
-        with self.__frame:
-            self._build_fn()
+        CustomBaseWidget.__init__(self, model=model, **kwargs)
 
     def destroy(self):
-        self.existing_model = None
-        self.revert_img = None
-        self.__attr_label = None
-        self.__frame = None
+        CustomBaseWidget.destroy()
         self.__options = None
         self.__combobox_widget = None
 
@@ -65,16 +48,9 @@ class TaskTypeComboboxWidget():
     def _restore_default(self):
         """Restore the default value."""
         if self.revert_img.enabled:
-            # self.__combobox_widget.model.get_item_value_model().set_value(
-            #     self.__default_val)
+            self.__combobox_widget.model.get_item_value_model().set_value(
+                self.__default_val)
             self.revert_img.enabled = False
-            if self.on_restore_fn:
-                self.on_restore_fn(True)
-        else:
-            self.revert_img.enabled = True
-            if self.on_restore_fn:
-                self.on_restore_fn(False)
-    
 
     def _build_body(self):
         """Main meat of the widget.  Draw the Rectangle, Combobox, and
@@ -87,7 +63,7 @@ class TaskTypeComboboxWidget():
 
                 # Use the outline from the Rectangle for the Combobox
                 ui.Rectangle(name="combobox",
-                             height=22)
+                             height=BLOCK_HEIGHT)
 
                 option_list = list(self.__options)
                 self.__combobox_widget = ui.ComboBox(
@@ -108,47 +84,9 @@ class TaskTypeComboboxWidget():
                             ui.Image(name="collapsable_closed", width=12, height=12)
                     ui.Spacer(width=2)  # Right margin
 
-            ui.Spacer(width=ui.Percent(5))
+            ui.Spacer(width=ui.Percent(30))
 
         self.__combobox_widget.model.add_item_changed_fn(self._on_value_changed)
-
-    def _build_head(self):
-        """Build the left-most piece of the widget line (label in this case)"""
-        ui.Label(
-            self.__attr_label,
-            width=80,
-            style = {"color": "lightsteelblue", "margin_height": 2, "alignment": ui.Alignment.RIGHT_TOP}
-        )
-
-    def _build_tail(self):
-        """Build the right-most piece of the widget line. In this case,
-        we have a Revert Arrow button at the end of each widget line.
-        """
-        with ui.HStack(width=0):
-            # ui.Spacer(width=5)
-            with ui.VStack(height=0):
-                ui.Spacer(height=3)
-                self.revert_img = ui.Image(
-                    name="revert_arrow_task_type",
-                    fill_policy=ui.FillPolicy.PRESERVE_ASPECT_FIT,
-                    width=12,
-                    height=13,
-                    enabled=False,
-                    tooltip="randomly fill (or reset) task type, object id, and house id."
-                )
-            ui.Spacer(width=5)
-
-        # call back for revert_img click, to restore the default value
-        self.revert_img.set_mouse_pressed_fn(
-            lambda x, y, b, m: self._restore_default())
-
-    def _build_fn(self):
-        """Puts the 3 pieces together."""
-        with ui.HStack():
-            self._build_head()
-            self._build_body()
-            self._build_tail()
-
 
 
 class CustomBoolWidget(CustomBaseWidget):
@@ -406,53 +344,38 @@ class CustomSkySelectionGroup(CustomBaseWidget):
             self.enable_buttons()
             self.on_select_fn("")
 
-
-class CustomIdNotice():
-    def __init__(self) -> None:
-        self.ui = ui.HStack()
-        with self.ui:
-            ui.Spacer(width=4)
-            self.task_ui = ui.Button("pickup_object", name = "control_button", style = {"color": "lightsteelblue", "border_color": "lightsteelblue"}, enabled = False)
-            ui.Spacer(width=4)
-            self.object_ui = ui.Button("object: 0", name = "control_button", style = {"color": "DarkSalmon", "border_color": "DarkSalmon"}, enabled = False)
-            ui.Spacer(width=4)
-            self.house_ui = ui.Button("house: 1", name = "control_button", style = {"color": "Plum", "border_color": "Plum"}, enabled = False)
-        
-        self.ui.visible = False
-
-
-class CustomRenderTypeSelectionGroup(CustomBaseWidget):
+class CustomFlowSelectionGroup(CustomBaseWidget):
     def __init__(self,
         on_select_fn: callable = None 
     ) -> None:
         self.on_select_fn = on_select_fn
         self.sky_type = ""
-        CustomBaseWidget.__init__(self, label = "Render type:")
+        CustomBaseWidget.__init__(self, label = "Flow type:")
 
     def _build_body(self):
         with ui.HStack():
-            self.button_rgb = ui.Button("RGB", name = "control_button_pressed3")
-            self.button_depth= ui.Button("Depth", name = "control_button")
-            self.button_semantic = ui.Button("Semantic", name = "control_button")
+            self.button_fire = ui.Button("Fire", name = "control_button")
+            self.button_smoke = ui.Button("Smoke", name = "control_button")
+            self.button_dust = ui.Button("Dust", name = "control_button")
 
-        self.button_rgb.set_clicked_fn(lambda : self._on_button("rgb"))
-        self.button_depth.set_clicked_fn(lambda : self._on_button("depth"))
-        self.button_semantic.set_clicked_fn(lambda : self._on_button("semantic"))
+        self.button_fire.set_clicked_fn(lambda : self._on_button("fire"))
+        self.button_smoke.set_clicked_fn(lambda : self._on_button("smoke"))
+        self.button_dust.set_clicked_fn(lambda : self._on_button("dust"))
 
-        self.button_list = [self.button_rgb, self.button_depth, self.button_semantic]
-        
+        self.button_list = [self.button_fire, self.button_smoke, self.button_dust]
 
     def enable_buttons(self):
         for button in self.button_list:
             button.enabled = True
             button.name = "control_button"
 
-    def _on_button(self, render_type:str):
+    def _on_button(self, flow_type:str):
         if self.on_select_fn:
-            self.on_select_fn(render_type.capitalize())
+            self.on_select_fn(flow_type.capitalize())
+
         self.enable_buttons()
-        button = getattr(self, f"button_{render_type}")
-        button.name = f"control_button_pressed{3}"
+        button = getattr(self, f"button_{flow_type}")
+        button.name = f"control_button_pressed{2}"
         self.revert_img.enabled = True
 
     def _restore_default(self):
@@ -460,7 +383,27 @@ class CustomRenderTypeSelectionGroup(CustomBaseWidget):
         if self.revert_img.enabled:
             self.revert_img.enabled = False
             self.enable_buttons()
-            self._on_button("rgb")
+            self.on_select_fn("")
+
+
+class CustomStringField(CustomBaseWidget):
+    def __init__(self,
+        label:str,
+        string_ui_name = "input_text"
+    ) -> None:
+        self.label = label
+        self.string_ui_name = string_ui_name
+        CustomBaseWidget.__init__(self, label = label)
+
+    def _build_body(self):
+        with ui.HStack():
+            string_ui = ui.StringField(height = 20, width = 100)
+
+        self.model = string_ui.model
+        self.model.set_value("Q")
+
+    def _build_tail(self):
+        return 
 
 import subprocess, os, platform
 

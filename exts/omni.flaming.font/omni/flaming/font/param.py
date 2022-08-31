@@ -8,4 +8,6 @@ EXTENSION_FOLDER_PATH = Path(
 )
 
 EXTENSION_ROOT = str(EXTENSION_FOLDER_PATH.resolve())
-print("EXTENSION_ROOT: ", EXTENSION_ROOT) 
+print("EXTENSION_ROOT: ", EXTENSION_ROOT)  
+
+FONT_TYPES = os.listdir(os.path.join(EXTENSION_ROOT, "fonts"))

@@ -24,6 +24,7 @@ class CustomBaseWidget:
         self.revert_img = None
         self.__attr_label: Optional[str] = kwargs.pop("label", "")
         self.__frame = ui.Frame()
+        self.tooltip = kwargs.get("tooltip", "")
         with self.__frame:
             self._build_fn()
 
@@ -45,6 +46,7 @@ class CustomBaseWidget:
             self.__attr_label,
             name="attribute_name",
             width=120,
+            tooltip=self.tooltip,
         )
 
     def _build_body(self):

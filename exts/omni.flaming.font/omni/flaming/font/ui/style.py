@@ -227,6 +227,8 @@ julia_modeler_style = {
         "margin": 8,
     },
 
+    "Label::attribute_name:hovered": {"color": cl.main_attr_label_text_hover},
+
     "Button::record_button": {
         "background_color": cl.field_bg,
         "border_color": cl.btn_border,
@@ -241,7 +243,8 @@ julia_modeler_style = {
         "border_color": cl.btn_border,
         "border_width": fl.border_width,
         "border_radius": 10,
-        "margin": 4,
+        "margin_height": 4,
+        "margin_width": 40,
         "corner_flag": ui.CornerFlag.ALL,
     },
 

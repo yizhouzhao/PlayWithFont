@@ -1,9 +1,14 @@
+import os
+
 import omni
 import omni.ext
 import omni.ui as ui
-from pxr import Gf, Sdf, UsdGeom
+from omni.physx.scripts import physicsUtils
 
-import os
+from pxr import Gf, Sdf, UsdGeom, UsdLux
+
+import carb
+
 
 
 
@@ -27,17 +32,17 @@ except:
     import triangle
 
 ################################ flaming font import ####################################
-from .param import EXTENSION_ROOT 
+from .param import EXTENSION_ROOT, FONT_TYPES 
 from .font.font_create import MeshGenerator
 from .flow.flow_generate import FlowGenerator
 from .fluid.fluid_generate import FluidGenerator
 from .formable.deformable_generate import DeformableBodyGenerator
 
-from .util.scene import *
 
 ################################# flaming font ui #######################################
 from  .ui.style import julia_modeler_style
 from .ui.custom_ui_widget import *
+from .ui.custom_color_widget import CustomColorWidget
 
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
@@ -52,7 +57,9 @@ class MyExtension(omni.ext.IExt):
         omni.kit.commands.execute("ChangeSetting", path="rtx/flow/enabled", value=True)
 
         # component
+        self.font_prim_str = None
         self.mesh_generator = None
+        self.mesh_generator_cache = {}
         self.flow_generator = None
         self.fluid_generator = None
 
@@ -71,14 +78,57 @@ class MyExtension(omni.ext.IExt):
             self._window.frame.style = julia_modeler_style
             with ui.ScrollingFrame():
                 with ui.VStack():
-                    self.input_text_ui = ui.StringField(height=20, style={ "margin_height": 2})
-                    self.input_text_ui.model.set_value("Los Ángeles")
-                    ui.Button("Generate Font Test", clicked_fn=self.generateFont)
-                    ui.Button("Generate Fire", clicked_fn=self.generateFire)
-                    ui.Button("Generate Fluid", clicked_fn=self.generateFluid)
-                    ui.Button("Generate Deformable Body", clicked_fn=self.generateDeformbable)
-                    ui.Spacer(height = 20)
-                    ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
+                    with ui.CollapsableFrame("CREATE FONT"):
+                        with ui.VStack(height=0, spacing=4):
+                            ui.Line(style_type_name_override="HeaderLine")
+                            ui.Spacer(height = 2)
+                            
+                            self.input_text_ui = CustomStringField("Input text:")
+                            self.font_type_ui = CustomComboboxWidget(label="Font type:", options=FONT_TYPES)
+                            self.font_height_ui = CustomSliderWidget(min=10, max=100, label="Font size:", default_val=52,
+                                tooltip = "Font 3D text model size.")
+                            self.font_extrude_ui = CustomSliderWidget(min=100, max=1000, label="Font extrude:", default_val=768, 
+                                tooltip = "Extrude value for 3D model.")
+                            # self.font_bezier_ui = CustomSliderWidget(min=1, max=4, label="Bezier step:", default_val=3, 
+                            #     tooltip = "Bezier step to make the font model, heigher value gets smoother contours.")
+                           
+                            ui.Button("Generate 3D Text", height = 40, name = "load_button", clicked_fn=self.generateFont)
+                    
+                    with ui.CollapsableFrame("EFFECT"):
+                        with ui.VStack(height=0, spacing=4):
+                            ui.Line(style_type_name_override="HeaderLine")
+                            ui.Spacer(height = 2)
+
+                            with ui.CollapsableFrame("FLOW"):
+                                with ui.VStack(height=0, spacing=4):
+                                    ui.Line(style_type_name_override="HeaderLine")
+                                    ui.Spacer(height = 2)
+                            
+                                    # ui.StringField(height=20, style={ "margin_height": 2})
+                                    # self.input_text_ui.model.set_value("Los Ángeles")
+                                    ui.Button("Generate Flow", clicked_fn=self.generateFire, height = 40, 
+                                        style = {"background_color": "sienna"}, name = "load_button",)
+
+                            
+                            with ui.CollapsableFrame("FLUID"):
+                                with ui.VStack(height=0, spacing=4):
+                                    ui.Line(style_type_name_override="HeaderLine")
+                                    ui.Spacer(height = 2)
+
+                                    ui.Button("Generate Fluid", clicked_fn=self.generateFluid, height = 40, 
+                                        style = {"background_color": "darkslateblue"}, name = "load_button")
+                  
+                            with ui.CollapsableFrame("DEFORMABLE BODY"):
+                                with ui.VStack(height=0, spacing=4):
+                                    ui.Line(style_type_name_override="HeaderLine")
+                                    ui.Spacer(height = 2)
+                                    self.deformable_resolution_ui = CustomSliderWidget(min=5, max=20, label="Deformable resolution:", default_val=10, 
+                                            tooltip = "Resolution for the deformable body. Larger resolution results in more partitions.")
+                                    ui.Button("Generate Deformable Body", height = 40, 
+                                        style = {"background_color": "DarkSlateGray"}, name = "load_button", clicked_fn=self.generateDeformbable)
+                            
+                            ui.Spacer(height = 20)
+                            ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
 
                     ui.Spacer(height = 10)
                     ui.Line(style_type_name_override="HeaderLine")
@@ -89,12 +139,62 @@ class MyExtension(omni.ext.IExt):
                             # open a new stage
                             ui.Button("New scene", height = 40, name = "load_button", clicked_fn=lambda : omni.kit.window.file.new(), style={ "margin": 4}, tooltip = "open a new empty stage")
                             # ground plan
-                            CustomBoolWidget(label="Add ground:", default_value=False, on_checked_fn = toggle_ground_plane) 
-                            
+                            ui.Line(style={"color":"gray", "margin_height": 8, "margin_width": 20})
+                            self.ground_color_ui = CustomColorWidget(0.5, 0.5, 0.5, label="Ground color:")
+                            ui.Button("Add/Remove ground plane", height = 40, name = "load_button", clicked_fn=self.toggle_ground_plane, style={ "margin": 4}, tooltip = "Add or remove the ground plane")
+                         
                             # light intensity
-                            CustomSliderWidget(min=0, max=3000, label="Light intensity:", default_val=1000, on_slide_fn = change_light_intensity)
-                        
+                            ui.Line(style={"color":"gray", "margin_height": 8, "margin_width": 20})
+                            CustomSliderWidget(min=0, max=3000, label="Light intensity:", default_val=1000, on_slide_fn = self.change_light_intensity)
                             
+    ####################### scene utility #################################################
+
+    def toggle_ground_plane(self):
+        """
+        Add or remove ground plane 
+        """
+        stage = omni.usd.get_context().get_stage()
+        ground_prim = stage.GetPrimAtPath("/World/groundPlane")
+        if not ground_prim:
+            # ground_colors = [float(s) for s in self.ground_color_ui.get_color_stringfield().split(",")]
+            # ground_color_vec = Gf.Vec3f(*ground_colors)
+            physicsUtils.add_ground_plane(stage, "/World/groundPlane", "Y", 750.0, Gf.Vec3f(0.0), Gf.Vec3f(0.3))
+            self.change_ground_color()
+        else:
+            omni.kit.commands.execute("DeletePrims", paths=["/World/groundPlane"])
+
+    def change_ground_color(self):
+        """
+        Change ground color from color ui
+        """
+        entityPlane = UsdGeom.Mesh.Get(omni.usd.get_context().get_stage(), "/World/groundPlane/CollisionMesh")
+        ground_colors = [float(s) for s in self.ground_color_ui.get_color_stringfield().split(",")]
+        ground_color_vec = Gf.Vec3f(*ground_colors)
+        entityPlane.CreateDisplayColorAttr().Set([ground_color_vec])
+
+    def change_light_intensity(self, intensity:float = 1000):
+        """
+        Change light intensity
+        """
+        stage = omni.usd.get_context().get_stage()
+        light_prim = stage.GetPrimAtPath("/World/defaultLight")
+
+        if not light_prim:
+            # Create basic DistantLight
+            omni.kit.commands.execute(
+                "CreatePrim",
+                prim_path="/World/defaultLight",
+                prim_type="DistantLight",
+                select_new_prim=False,
+                attributes={UsdLux.Tokens.angle: 1.0, UsdLux.Tokens.intensity: 1000},
+                create_default_xform=True,
+            )
+
+            light_prim = stage.GetPrimAtPath("/World/defaultLight")
+
+        light_prim.GetAttribute("intensity").Set(float(intensity))
+
+
     def on_shutdown(self):
         print("[omni.flaming.font] omni.flaming.font shutdown")
 
@@ -104,45 +204,81 @@ class MyExtension(omni.ext.IExt):
         if self.flow_generator:
             self.flow_generator.shutdown()
         
-        if self.mesh_generator:
-            self.mesh_generator.shutdown()
+        # if self.mesh_generator: 
+        #     self.mesh_generator.shutdown()
+
+        for key, mg in self.mesh_generator_cache.items():
+            mg.shutdown()
+
+        del self.mesh_generator_cache
 
     def generateFont(self):
-        print("generateFont!")
+        """
+        Generate 3D Text from input
+        """
 
-        font_file = os.path.join(EXTENSION_ROOT, 'fonts', 'LXGWClearGothic-Book.ttf')
-    
+        task_index = self.font_type_ui.model.get_item_value_model().get_value_as_int()
+        task_type = FONT_TYPES[task_index]
+        font_file = os.path.join(EXTENSION_ROOT, 'fonts', task_type)
+        font_height = self.font_height_ui.model.get_value_as_int()
+        font_extrude = self.font_extrude_ui.model.get_value_as_int()
+
         input_text = self.input_text_ui.model.get_value_as_string()
 
         mesh_file = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
-        self.mesh_generator = MeshGenerator(font_file, height = 48, text = input_text, extrude=768) 
+        self.mesh_generator = MeshGenerator(font_file, height = font_height, text = input_text, extrude=font_extrude) 
         self.mesh_generator.generateMesh(create_obj = True)
         self.mesh_generator.saveMesh(mesh_file)
-        
-        print("mesh polygons", self.mesh_generator.offsets)
-        print("mesh generated")
+
+        # load 3d model into the scene
+        self.font_prim_str = self.addFont3DModel()
+
+        # add information to cache
+        self.mesh_generator_cache[self.font_prim_str] = self.mesh_generator
+
 
     def addFont3DModel(self, scale = 10):
-        print("add font 3d model")
+        """
+        Load font 3d model into scene
+        """
+        
 
         self.stage = omni.usd.get_context().get_stage()
 
         input_text = self.input_text_ui.model.get_value_as_string()
 
-        font_prim = self.stage.GetPrimAtPath(f"/World/font3d_{input_text}")
+        font_prim_path =  omni.usd.get_stage_next_free_path(self.stage, "/World/font3d", False)
+        font_prim = self.stage.GetPrimAtPath(font_prim_path)
         if not font_prim.IsValid():
-            font_prim = self.stage.DefinePrim(f"/World/font3d_{input_text}")
-        
+            successful, font_prim = omni.kit.commands.execute(
+                "CreatePrimWithDefaultXform",
+                prim_path=font_prim_path,
+                prim_type="Xform",
+                select_new_prim=True,
+                create_default_xform=False,
+            )
+            font_prim = self.stage.GetPrimAtPath(font_prim_path)
+
         font_model_path = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
         success_bool = font_prim.GetReferences().AddReference(font_model_path)
 
         font_prim.GetAttribute("xformOp:scale").Set((scale, scale,  scale))
+
+        # add attribute
+        font_prim.CreateAttribute("font:input_text",  Sdf.ValueTypeNames.String, False).Set(input_text)
+
+        return font_prim.GetPath().pathString
     
     def generateFire(self, sample_gap: int = 5):
         print("generate fire!")
 
-        # constant
-        self.flow_generator = FlowGenerator()
+        # select the correct font prim
+        font_prim = self.findFontPrim4Selection()
+        input_text = font_prim.GetAttribute("font:input_text").Get()
+
+        # flow generator
+        if not self.flow_generator:
+            self.flow_generator = FlowGenerator()
 
         all_points, is_outline = self.mesh_generator.getOutlinePoints(max_step=50)
         self.flow_generator.setEmitterPositions(all_points)
@@ -168,7 +304,9 @@ class MyExtension(omni.ext.IExt):
         for i in range(len(self.flow_generator.emitter_positions)):
             if is_outline[i] or sample_step == 0: # is_outline[i] or 
                 pos = self.flow_generator.emitter_positions[i] 
-                self.flow_generator.generateFireAtPoint(pos + [0.0], flow_path_str = f"/World/Flow/Xform_{i}", \
+                # self.flow_generator.generateFireAtPoint(pos + [0.0], flow_path_str = f"/World/Flow/Xform_{i}", \
+                #     radius = 5.0, emitter_only=has_emitter)
+                self.flow_generator.generateSmokeAtPoint(pos + [0.0], flow_path_str = f"/World/Flow/Xform_{i}", \
                     radius = 5.0, emitter_only=has_emitter)
                 has_emitter = True
 
@@ -188,12 +326,50 @@ class MyExtension(omni.ext.IExt):
         self.fluid_generator.setPartclePositions(grid_points, radius=3.0)
 
     def generateDeformbable(self):
-        print("generateDeformbable")
+        """
+        Generate deformable body for one mesh
+        """
+
+        # select the correct font prim
+        font_prim = self.findFontPrim4Selection()
+        input_text = font_prim.GetAttribute("font:input_text").Get()
+        
+        if len(input_text) > 1:
+            carb.log_error("More than one char may cause unexpected results for deformable body. Please input one char at one time.")
+            
+
         self.stage = omni.usd.get_context().get_stage()
         self.deformable_generator = DeformableBodyGenerator()
+
+        deformable_resolution = self.deformable_resolution_ui.model.get_value_as_int()
+        self.deformable_generator.setDeformableBodyToPrim(font_prim, deformable_resolution)
+
+    ######################################## utils ######################################
+    def findFontPrim4Selection(self):
+        """
+        Find the root font prim from selection
+        """
+        self.stage = omni.usd.get_context().get_stage()
+        font_prim = None
 
         selection = omni.usd.get_context().get_selection()
         if selection:
             paths = selection.get_selected_prim_paths()
-            first_selected_prim = self.stage.GetPrimAtPath(paths[0])
-            self.deformable_generator.setDeformableBodyToPrim(first_selected_prim)
+
+            if len(paths) != 1:
+                raise Exception("Please select only one font mesh.")
+
+            prim = self.stage.GetPrimAtPath(paths[0])
+            while prim.IsValid():
+                if prim.HasAttribute("font:input_text"):
+                    font_prim = prim 
+                    break
+                prim = prim.GetParent()
+            
+        else:
+            raise Exception("Please select one font mesh.")
+
+        if not font_prim:
+            raise Exception("No 3D font selected.")
+
+        return font_prim

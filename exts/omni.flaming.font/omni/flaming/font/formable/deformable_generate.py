@@ -13,7 +13,7 @@ class DeformableBodyGenerator():
         self.stage = omni.usd.get_context().get_stage()
 
     def setDeformableBodyToPrim(self, prim, simulation_resolution:int = 10):
-        print("setDeformableBodyToPrim")
+        print("setting DeformableBody")
 
         # get all children
         def get_all_descendents(prim, output=[]):

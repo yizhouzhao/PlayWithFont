@@ -7,7 +7,7 @@ from .font_util import *
 
 class MeshGenerator():
     def __init__(self, fontFile, height:int, text:str, 
-        bezierSteps = 2, extrude = 96, bevelRadius = 0, bevelSteps=4) -> None:
+        bezierSteps = 3, extrude = 96, bevelRadius = 0, bevelSteps=4) -> None:
 
         # properties
         self.fontFile = fontFile
@@ -48,6 +48,7 @@ class MeshGenerator():
 
     def saveMesh(self, mesh_file = "test0.obj"):
         self.mesh.saveOBJ(mesh_file)
+        print("OBJ mesh save to path:", mesh_file)
         
     def AddCharacter(self, c, create_obj = True):
         """
