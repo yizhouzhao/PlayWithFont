@@ -286,7 +286,7 @@ julia_modeler_style = {
     },
 
     "Button::control_button_pressed2": {
-        "background_color": cl(0.1, 0.3, 0.7, 0.3),
+        "background_color": cl(0.8, 0.2, 0.1, 0.3),
         "border_color": cl.btn_border,
         "border_width": fl.border_width,
         "border_radius": 4,

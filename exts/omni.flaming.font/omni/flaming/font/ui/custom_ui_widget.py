@@ -352,6 +352,9 @@ class CustomFlowSelectionGroup(CustomBaseWidget):
         self.sky_type = ""
         CustomBaseWidget.__init__(self, label = "Flow type:")
 
+        # default type
+        self._on_button("fire")
+
     def _build_body(self):
         with ui.HStack():
             self.button_fire = ui.Button("Fire", name = "control_button")
@@ -363,6 +366,9 @@ class CustomFlowSelectionGroup(CustomBaseWidget):
         self.button_dust.set_clicked_fn(lambda : self._on_button("dust"))
 
         self.button_list = [self.button_fire, self.button_smoke, self.button_dust]
+
+        # default
+        # self._on_button("fire")
 
     def enable_buttons(self):
         for button in self.button_list:

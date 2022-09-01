@@ -57,10 +57,12 @@ class MyExtension(omni.ext.IExt):
         omni.kit.commands.execute("ChangeSetting", path="rtx/flow/enabled", value=True)
 
         # component
-        self.font_prim_str = None
         self.mesh_generator = None
         self.mesh_generator_cache = {}
+
+        self.flow_type = "Fire"
         self.flow_generator = None
+
         self.fluid_generator = None
 
         # stage
@@ -104,9 +106,14 @@ class MyExtension(omni.ext.IExt):
                                     ui.Line(style_type_name_override="HeaderLine")
                                     ui.Spacer(height = 2)
                             
-                                    # ui.StringField(height=20, style={ "margin_height": 2})
-                                    # self.input_text_ui.model.set_value("Los Ángeles")
-                                    ui.Button("Generate Flow", clicked_fn=self.generateFire, height = 40, 
+                                    
+                                    CustomFlowSelectionGroup(on_select_fn = self.set_flow_type)
+                                    self.flow_radius_ui = CustomSliderWidget(min=1.0, max=50, num_type = "float", label="Flow radius:", default_val=5.0, 
+                                        tooltip = "Flow emitter size.")
+                                    self.flow_coolingrate_ui = CustomSliderWidget(min=0.0, max=5.0, num_type = "float", label="Cooling rate:", default_val=1.5, 
+                                        tooltip = "Advection cooling rate.")
+                      
+                                    ui.Button("Generate Flow", clicked_fn=self.generateFlow, height = 40, 
                                         style = {"background_color": "sienna"}, name = "load_button",)
 
                             
@@ -231,10 +238,10 @@ class MyExtension(omni.ext.IExt):
         self.mesh_generator.saveMesh(mesh_file)
 
         # load 3d model into the scene
-        self.font_prim_str = self.addFont3DModel()
+        self.addFont3DModel()
 
         # add information to cache
-        self.mesh_generator_cache[self.font_prim_str] = self.mesh_generator
+        self.mesh_generator_cache[input_text] = self.mesh_generator
 
 
     def addFont3DModel(self, scale = 10):
@@ -267,35 +274,46 @@ class MyExtension(omni.ext.IExt):
         # add attribute
         font_prim.CreateAttribute("font:input_text",  Sdf.ValueTypeNames.String, False).Set(input_text)
 
-        return font_prim.GetPath().pathString
     
-    def generateFire(self, sample_gap: int = 5):
+    def generateFlow(self, sample_gap: int = 5):
         print("generate fire!")
+        stage = omni.usd.get_context().get_stage()
 
         # select the correct font prim
         font_prim = self.findFontPrim4Selection()
         input_text = font_prim.GetAttribute("font:input_text").Get()
+        font_prim_path_str = font_prim.GetPath().pathString
+
+        # mesh generator
+        self.mesh_generator = self.mesh_generator_cache[input_text]
 
         # flow generator
         if not self.flow_generator:
             self.flow_generator = FlowGenerator()
+        
+        # set flow type
+        self.flow_generator.set_flow_type(self.flow_type)
+
+        # load flow property
+        flow_radius = self.flow_radius_ui.model.get_value_as_float()
+        flow_coolingrate = self.flow_coolingrate_ui.model.get_value_as_float()
 
         all_points, is_outline = self.mesh_generator.getOutlinePoints(max_step=50)
         self.flow_generator.setEmitterPositions(all_points)
         print("outlinePoints", len(self.flow_generator.emitter_positions), self.flow_generator.emitter_positions[0])
 
 
-        # create xform at point
-        stage = omni.usd.get_context().get_stage()
-        flow_prim = stage.GetPrimAtPath("/World/Flow")
-        if not flow_prim.IsValid():
-            omni.kit.commands.execute(
-                        "CreatePrim",
-                        prim_path="/World/Flow",
-                        prim_type="Xform", # Xform
-                        select_new_prim=False,
-                    )
+        # create xform as root
+        flow_prim_path_str = omni.usd.get_stage_next_free_path(stage, f"{font_prim_path_str}_Flow", False)
 
+        omni.kit.commands.execute(
+                    "CreatePrim",
+                    prim_path=flow_prim_path_str,
+                    prim_type="Xform", # Xform
+                    select_new_prim=False,
+                ) 
+
+        # generate emitters
         has_emitter = False
         sample_step = sample_gap
 
@@ -304,10 +322,8 @@ class MyExtension(omni.ext.IExt):
         for i in range(len(self.flow_generator.emitter_positions)):
             if is_outline[i] or sample_step == 0: # is_outline[i] or 
                 pos = self.flow_generator.emitter_positions[i] 
-                # self.flow_generator.generateFireAtPoint(pos + [0.0], flow_path_str = f"/World/Flow/Xform_{i}", \
-                #     radius = 5.0, emitter_only=has_emitter)
-                self.flow_generator.generateSmokeAtPoint(pos + [0.0], flow_path_str = f"/World/Flow/Xform_{i}", \
-                    radius = 5.0, emitter_only=has_emitter)
+                self.flow_generator.generateFlowAtPoint(pos + [0.0], flow_path_str = f"{flow_prim_path_str}/Xform_{i}", \
+                    radius = flow_radius, coolingRate=flow_coolingrate, emitter_only=has_emitter)
                 has_emitter = True
 
                 sample_step = sample_gap
@@ -315,6 +331,11 @@ class MyExtension(omni.ext.IExt):
                 sample_step -= 1
 
         print("time elapse:", time.time() - begin)
+
+        # # move flow to the correct position
+        # flow_root_prim = stage.GetPrimAtPath(flow_prim_path_str)
+        # font_prim_pos = font_prim.GetAttribute("xformOp:translate").Get()
+        # flow_root_prim.GetAttribute("xformOp:translate").Set(font_prim_pos)
 
     def generateFluid(self):
         print("generateFluid")
@@ -373,3 +394,6 @@ class MyExtension(omni.ext.IExt):
             raise Exception("No 3D font selected.")
 
         return font_prim
+
+    def set_flow_type(self, flow_type):
+        self.flow_type = flow_type
