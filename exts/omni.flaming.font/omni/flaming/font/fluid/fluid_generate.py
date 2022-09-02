@@ -1,5 +1,6 @@
 import omni
 import carb
+import asyncio
 
 from pxr import Gf, UsdPhysics, Sdf, Usd, UsdGeom, PhysxSchema, Vt, UsdShade
 from omni.physx.scripts import utils, physicsUtils, particleUtils
@@ -14,7 +15,6 @@ class FluidGenerator():
         self.fluid_path_root = fluid_path_root
 
         # stage
-        self.stage = omni.usd.get_context().get_stage()
         PARTICLE_PROPERTY.set_partical_properties()
 
         # gpu
@@ -30,10 +30,13 @@ class FluidGenerator():
 
 
 
-    def setPartclePositions(self, points, scale = 10, radius = 3.0, max_velocity = 50.0):
+    def setPartclePositions(self, points, scale = 10, radius = 3.0, max_velocity = 50.0, color = Gf.Vec3f(1.0,0,0)):
         """
         Add particles at points
         """
+        # stage
+        self.stage = omni.usd.get_context().get_stage()
+
         self.particle_positions = [[p[0] / scale, p[1] / scale, 0] for p in points]
 
         # for i, point in enumerate(self.particle_positions):
@@ -54,7 +57,7 @@ class FluidGenerator():
         self.set_up_fluid_physical_scene() 
 
         # fluid root
-        particleSystemStr =  "/World/Fluid" # game_prim.GetPath().AppendPath("Fluid").pathString
+        particleSystemStr = omni.usd.get_stage_next_free_path(self.stage, "/World/Fluid", False) # game_prim.GetPath().AppendPath("Fluid").pathString
         self.particleSystemPath = Sdf.Path(particleSystemStr)
         self.particleInstanceStr = f"{self.fluid_path_root}" # game_prim.GetPath().AppendPath("Particles").pathString
 
@@ -79,9 +82,6 @@ class FluidGenerator():
 
         positions = Vt.Vec3fArray(positions_list)
         velocities = Vt.Vec3fArray(velocities_list)
-
-        # enable isosurface
-        self.enable_isosurface(max_velocity=max_velocity)
         
         particleUtils.add_physx_particleset_pointinstancer(
             stage=self.stage,
@@ -109,6 +109,8 @@ class FluidGenerator():
         # print("sphere_extent_attr", sphere_extent_attr)
         # print("positions_list", len(positions_list), positions_list[:5])
 
+        # enable isosurface
+        self.enable_isosurface(max_velocity=max_velocity, color = color)
 
     def set_up_fluid_physical_scene(self):
         """
@@ -133,77 +135,91 @@ class FluidGenerator():
         return 
 
 
-    def enable_isosurface(self, max_velocity = 50.0):
-        print("isosurface settings")
-        particle_system = self._particleSystem
-        
-        mtl_created = []
-        omni.kit.commands.execute(
-            "CreateAndBindMdlMaterialFromLibrary",
-            mdl_name="OmniSurfacePresets.mdl",
-            mtl_name="OmniSurface_DeepWater",
-            mtl_created_list=mtl_created,
-            select_new_prim=False,
-        )
-        self.particle_material_path = mtl_created[0]
-        omni.kit.commands.execute(
-            "BindMaterial", prim_path=self.particleSystemPath, material_path=self.particle_material_path
-        )     
-        
+    def enable_isosurface(self, max_velocity = 50.0, color = Gf.Vec3f(1.0, 0.0, 0.0)):
+        async def enable_isosurface_async():
+            print("isosurface settings")
+            particle_system = self._particleSystem
+            
+            mtl_created = []
+            omni.kit.commands.execute(
+                "CreateAndBindMdlMaterialFromLibrary",
+                mdl_name="OmniSurfacePresets.mdl",
+                mtl_name="OmniSurface_DeepWater",
+                mtl_created_list=mtl_created,
+                select_new_prim=False,
+            )
 
-        # Create a pbd particle material and set it on the particle system
-        particleUtils.add_pbd_particle_material(
-            self.stage,
-            self.particle_material_path,
-            cohesion=0.01,
-            viscosity=0.0091,
-            surface_tension=0.0074,
-            friction=0.1,
-        )
-        physicsUtils.add_physics_material_to_prim(self.stage, particle_system.GetPrim(), self.particle_material_path)
+            self.particle_material_path = mtl_created[0]
+            await omni.kit.app.get_app().next_update_async()
+            selection = omni.usd.get_context().get_selection()
+            selection.set_selected_prim_paths([f"{self.particle_material_path}/Shader"], False)
+            await omni.kit.app.get_app().next_update_async()
+    
 
-        # max velocity
-        particle_system.CreateMaxVelocityAttr().Set(max_velocity)
+            print("changing property")
+            omni.kit.commands.execute('ChangeProperty',
+                prop_path=Sdf.Path(f'{self.particle_material_path}/Shader.inputs:specular_transmission_color'),
+                value=color,
+                prev=Gf.Vec3f(1.0, 1.0, 1.0)
+                )
 
-        
+            await omni.kit.app.get_app().next_update_async()
 
-        # add particle anisotropy
-        anisotropyAPI = PhysxSchema.PhysxParticleAnisotropyAPI.Apply(particle_system.GetPrim())
-        anisotropyAPI.CreateParticleAnisotropyEnabledAttr().Set(True)
-        aniso_scale = 1.0 # 5.0
-        anisotropyAPI.CreateScaleAttr().Set(aniso_scale)
-        anisotropyAPI.CreateMinAttr().Set(1.0)
-        anisotropyAPI.CreateMaxAttr().Set(2.0)
+            
+            omni.kit.commands.execute(
+                "BindMaterial", prim_path=self.particleSystemPath, material_path=self.particle_material_path
+            )     
+            
 
-        # add particle smoothing
-        smoothingAPI = PhysxSchema.PhysxParticleSmoothingAPI.Apply(particle_system.GetPrim())
-        smoothingAPI.CreateParticleSmoothingEnabledAttr().Set(True)
-        smoothingAPI.CreateStrengthAttr().Set(0.5)
+            # Create a pbd particle material and set it on the particle system
+            particleUtils.add_pbd_particle_material(
+                self.stage,
+                self.particle_material_path,
+                cohesion=0.01,
+                viscosity=0.0091,
+                surface_tension=0.0074,
+                friction=0.1,
+            )
+            physicsUtils.add_physics_material_to_prim(self.stage, particle_system.GetPrim(), self.particle_material_path)
 
-        fluidRestOffset = self._particleSystemSchemaParameters["rest_offset"]
-        # apply isosurface params
-        isosurfaceAPI = PhysxSchema.PhysxParticleIsosurfaceAPI.Apply(particle_system.GetPrim())
-        isosurfaceAPI.CreateIsosurfaceEnabledAttr().Set(True)
-        isosurfaceAPI.CreateMaxVerticesAttr().Set(1024 * 1024)
-        isosurfaceAPI.CreateMaxTrianglesAttr().Set(2 * 1024 * 1024)
-        isosurfaceAPI.CreateMaxSubgridsAttr().Set(1024 * 4)
-        isosurfaceAPI.CreateGridSpacingAttr().Set(fluidRestOffset * 1.5)
-        isosurfaceAPI.CreateSurfaceDistanceAttr().Set(fluidRestOffset * 1.6)
-        isosurfaceAPI.CreateGridFilteringPassesAttr().Set("")
-        isosurfaceAPI.CreateGridSmoothingRadiusAttr().Set(fluidRestOffset * 2)
+            # max velocity
+            particle_system.CreateMaxVelocityAttr().Set(max_velocity)
 
-        isosurfaceAPI.CreateNumMeshSmoothingPassesAttr().Set(1)
+            
 
-        primVarsApi = UsdGeom.PrimvarsAPI(particle_system)
-        primVarsApi.CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool).Set(True)
+            # add particle anisotropy
+            anisotropyAPI = PhysxSchema.PhysxParticleAnisotropyAPI.Apply(particle_system.GetPrim())
+            anisotropyAPI.CreateParticleAnisotropyEnabledAttr().Set(True)
+            aniso_scale = 1.0 # 5.0
+            anisotropyAPI.CreateScaleAttr().Set(aniso_scale)
+            anisotropyAPI.CreateMinAttr().Set(1.0)
+            anisotropyAPI.CreateMaxAttr().Set(2.0)
 
-        self.stage.SetInterpolationType(Usd.InterpolationTypeHeld)
+            # add particle smoothing
+            smoothingAPI = PhysxSchema.PhysxParticleSmoothingAPI.Apply(particle_system.GetPrim())
+            smoothingAPI.CreateParticleSmoothingEnabledAttr().Set(True)
+            smoothingAPI.CreateStrengthAttr().Set(0.5)
 
-        # move material path
-        # new_material_path_str = self.fluid_path_root + "/Looks/" + pbd_particle_material_path.split("/")[-1]
-        # omni.kit.commands.execute(
-        #     "MovePrim", path_from=pbd_particle_material_path, path_to=new_material_path_str
-        # )
+            fluidRestOffset = self._particleSystemSchemaParameters["rest_offset"]
+            # apply isosurface params
+            isosurfaceAPI = PhysxSchema.PhysxParticleIsosurfaceAPI.Apply(particle_system.GetPrim())
+            isosurfaceAPI.CreateIsosurfaceEnabledAttr().Set(True)
+            isosurfaceAPI.CreateMaxVerticesAttr().Set(1024 * 1024)
+            isosurfaceAPI.CreateMaxTrianglesAttr().Set(2 * 1024 * 1024)
+            isosurfaceAPI.CreateMaxSubgridsAttr().Set(1024 * 4)
+            isosurfaceAPI.CreateGridSpacingAttr().Set(fluidRestOffset * 1.5)
+            isosurfaceAPI.CreateSurfaceDistanceAttr().Set(fluidRestOffset * 1.6)
+            isosurfaceAPI.CreateGridFilteringPassesAttr().Set("")
+            isosurfaceAPI.CreateGridSmoothingRadiusAttr().Set(fluidRestOffset * 2)
+
+            isosurfaceAPI.CreateNumMeshSmoothingPassesAttr().Set(1)
+
+            primVarsApi = UsdGeom.PrimvarsAPI(particle_system)
+            primVarsApi.CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool).Set(True)
+
+            self.stage.SetInterpolationType(Usd.InterpolationTypeHeld)
+
+        asyncio.ensure_future(enable_isosurface_async())
 
     def shutdown(self):
         self.particle_positions = None

@@ -1,5 +1,6 @@
 import os
 import time
+import asyncio
 
 import omni
 import omni.ext
@@ -246,7 +247,7 @@ class MyExtension(omni.ext.IExt):
 
         input_text = self.input_text_ui.model.get_value_as_string()
 
-        mesh_file = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
+        mesh_file = os.path.join(EXTENSION_ROOT, "model", f"{input_text}.obj")
         self.mesh_generator = MeshGenerator(font_file, height = font_height, text = input_text, extrude=-font_extrude) 
         self.mesh_generator.generateMesh(create_obj = True)
         self.mesh_generator.saveMesh(mesh_file)
@@ -280,7 +281,7 @@ class MyExtension(omni.ext.IExt):
             )
             font_prim = self.stage.GetPrimAtPath(font_prim_path)
 
-        font_model_path = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
+        font_model_path = os.path.join(EXTENSION_ROOT, "model", f"{input_text}.obj")
         success_bool = font_prim.GetReferences().AddReference(font_model_path)
 
         font_prim.GetAttribute("xformOp:scale").Set((scale, scale,  scale))
@@ -394,12 +395,14 @@ class MyExtension(omni.ext.IExt):
         # property
         fluid_offset = self.fluid_offset_ui.model.get_value_as_int()
         fluid_radius = self.fluid_radius_ui.model.get_value_as_int()
+        fluid_colors = [float(s) for s in self.fluid_color_ui.get_color_stringfield().split(",")]
+        fluid_color_vec = Gf.Vec3f(*fluid_colors)
 
         grid_points = self.mesh_generator.getGridPointsInside(grid_size = fluid_offset)
         print("grid_points", len(grid_points), grid_points)
 
         self.fluid_generator = FluidGenerator(fluid_path_root=fluid_prim_path_str)
-        self.fluid_generator.setPartclePositions(grid_points, radius=fluid_radius)
+        self.fluid_generator.setPartclePositions(grid_points, radius=fluid_radius, color = fluid_color_vec)
 
         # physcial scene
         self.set_up_physical_scene()
@@ -418,16 +421,7 @@ class MyExtension(omni.ext.IExt):
         selection = omni.usd.get_context().get_selection()
         selection.clear_selected_prim_paths()
         selection.set_prim_path_selected(fluid_prim_path_str, True, True, True, True)
-
-        # change color
-        fluid_colors = [float(s) for s in self.fluid_color_ui.get_color_stringfield().split(",")]
-        fluid_color_vec = Gf.Vec3f(*fluid_colors)
-        
-        shader = UsdShade.Shader.Get(self.stage, Sdf.Path(self.fluid_generator.particle_material_path + "/Shader"))
-        # shader.CreateInput("diffuse_color_constant", Sdf.ValueTypeNames.Color3f)
-        # shader.GetPrim().HasAttribute("inputs:specularTransmissionColor")
-        shader.GetInput("specular_transmission_color").Set(fluid_color_vec)
-
+    
 
     def generateDeformbable(self):
         """
@@ -514,13 +508,22 @@ class MyExtension(omni.ext.IExt):
     def debug(self):
         print("debug")
         # url = "FireEffect"
-        # omni.kit.commands.execute("FlowCreatePreset", path="/World/Flow", layer=1, menu_item=url)
-        self.stage = omni.usd.get_context().get_stage()
-        self.particle_material_path = "/World/Looks/OmniSurface_DeepWater"
+               # change color
+        async def change_color(color):
+            # omni.kit.commands.execute("FlowCreatePreset", path="/World/Flow", layer=1, menu_item=url)
+            self.stage = omni.usd.get_context().get_stage()
+            self.particle_material_path = "/World/Looks/OmniSurface_DeepWater"
+                        
+            await omni.kit.app.get_app().next_update_async()
+
+            omni.kit.commands.execute('ChangeProperty',
+            prop_path=Sdf.Path("/World/Looks/OmniSurface_DeepWater/Shader" + ".inputs:specular_transmission_color"),
+            value=color,
+            prev=Gf.Vec3f(1.0, 1.0, 1.0),
+            )
+
+            print("changing color..............")
+
+            await omni.kit.app.get_app().next_update_async()
         
-        shader = UsdShade.Shader.Get(self.stage, Sdf.Path(self.particle_material_path + "/Shader"))
-        # shader.CreateInput("diffuse_color_constant", Sdf.ValueTypeNames.Color3f)
-        # shader.GetPrim().HasAttribute("inputs:specularTransmissionColor")
-        shader.GetInput("specular_transmission_color").Set(Gf.Vec3f(0))
-        print("color: ", shader, shader.GetInput("specular_transmission_color").Get() ) # "diffuse_color_constant"
-   
+        asyncio.ensure_future(change_color(Gf.Vec3f(1,0,0)))
