@@ -1,11 +1,12 @@
 import os
+import time
 
 import omni
 import omni.ext
 import omni.ui as ui
 from omni.physx.scripts import physicsUtils
 
-from pxr import Gf, Sdf, UsdGeom, UsdLux
+from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, PhysxSchema, UsdShade
 
 import carb
 
@@ -44,6 +45,8 @@ from  .ui.style import julia_modeler_style
 from .ui.custom_ui_widget import *
 from .ui.custom_color_widget import CustomColorWidget
 
+from omni.kit.window.popup_dialog import MessageDialog
+
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
 # on_shutdown() is called.
@@ -57,7 +60,7 @@ class MyExtension(omni.ext.IExt):
         omni.kit.commands.execute("ChangeSetting", path="rtx/flow/enabled", value=True)
 
         # component
-        self.mesh_generator = None
+        self.mesh_generator: MeshGenerator = None
         self.mesh_generator_cache = {}
 
         self.flow_type = "Fire"
@@ -109,7 +112,10 @@ class MyExtension(omni.ext.IExt):
                             
                                     
                                     CustomFlowSelectionGroup(on_select_fn = self.set_flow_type)
-                                    self.flow_radius_ui = CustomSliderWidget(min=1.0, max=50, num_type = "float", label="Flow radius:", default_val=5.0, 
+                                    self.flow_density_ui = CustomSliderWidget(min=0.01, max=0.99, num_type = "float", label="Flow density:", default_val=0.2, 
+                                        tooltip = "Flow emitter density")
+                             
+                                    self.flow_radius_ui = CustomSliderWidget(min=1.0, max=20, num_type = "float", label="Flow radius:", default_val=5.0, 
                                         tooltip = "Flow emitter size.")
                                     self.flow_coolingrate_ui = CustomSliderWidget(min=0.0, max=5.0, num_type = "float", label="Cooling rate:", default_val=1.5, 
                                         tooltip = "Advection cooling rate.")
@@ -123,6 +129,13 @@ class MyExtension(omni.ext.IExt):
                                     ui.Line(style_type_name_override="HeaderLine")
                                     ui.Spacer(height = 2)
 
+                                    self.fluid_offset_ui = CustomSliderWidget(min=10, max=100, label="Particle offset:", default_val=40,
+                                        tooltip = "Fluid particle offset. Higher value results in lower density.")
+                                    self.fluid_radius_ui = CustomSliderWidget(min=1, max=10, label="Particle radius:", default_val=5,
+                                        tooltip = "Fluid particle size.")
+                                    self.fluid_color_ui = CustomColorWidget(0.774, 0.94, 1.0, label="Ground color:")
+                       
+
                                     ui.Button("Generate Fluid", clicked_fn=self.generateFluid, height = 40, 
                                         style = {"background_color": "darkslateblue"}, name = "load_button")
                   
@@ -130,7 +143,7 @@ class MyExtension(omni.ext.IExt):
                                 with ui.VStack(height=0, spacing=4):
                                     ui.Line(style_type_name_override="HeaderLine")
                                     ui.Spacer(height = 2)
-                                    self.deformable_resolution_ui = CustomSliderWidget(min=5, max=20, label="Deformable resolution:", default_val=10, 
+                                    self.deformable_resolution_ui = CustomSliderWidget(min=5, max=20, label="Deformable resolution:", default_val=15, 
                                             tooltip = "Resolution for the deformable body. Larger resolution results in more partitions.")
                                     ui.Button("Generate Deformable Body", height = 40, 
                                         style = {"background_color": "DarkSlateGray"}, name = "load_button", clicked_fn=self.generateDeformbable)
@@ -234,7 +247,7 @@ class MyExtension(omni.ext.IExt):
         input_text = self.input_text_ui.model.get_value_as_string()
 
         mesh_file = os.path.join(EXTENSION_ROOT, "temp", f"{input_text}.obj")
-        self.mesh_generator = MeshGenerator(font_file, height = font_height, text = input_text, extrude=font_extrude) 
+        self.mesh_generator = MeshGenerator(font_file, height = font_height, text = input_text, extrude=-font_extrude) 
         self.mesh_generator.generateMesh(create_obj = True)
         self.mesh_generator.saveMesh(mesh_file)
 
@@ -276,8 +289,11 @@ class MyExtension(omni.ext.IExt):
         font_prim.CreateAttribute("font:input_text",  Sdf.ValueTypeNames.String, False).Set(input_text)
 
     
-    def generateFlow(self, sample_gap: int = 5):
-        print("generate fire!")
+    def generateFlow(self):
+        """
+        Generate Flow for 3D text
+        """
+
         stage = omni.usd.get_context().get_stage()
 
         # select the correct font prim
@@ -298,10 +314,13 @@ class MyExtension(omni.ext.IExt):
         # load flow property
         flow_radius = self.flow_radius_ui.model.get_value_as_float()
         flow_coolingrate = self.flow_coolingrate_ui.model.get_value_as_float()
-
+        flow_density =  self.flow_density_ui.model.get_value_as_float()
+        sample_gap = int(1 / flow_density)
+        # flow_outline_step = self.font_height_ui.model.get_value_as_int()
+        
         all_points, is_outline = self.mesh_generator.getOutlinePoints(max_step=50)
         self.flow_generator.setEmitterPositions(all_points)
-        print("outlinePoints", len(self.flow_generator.emitter_positions), self.flow_generator.emitter_positions[0])
+        # print("outlinePoints", len(self.flow_generator.emitter_positions), self.flow_generator.emitter_positions[0])
 
 
         # create xform as root
@@ -318,7 +337,7 @@ class MyExtension(omni.ext.IExt):
         has_emitter = False
         sample_step = sample_gap
 
-        import time
+        
         begin = time.time()
         for i in range(len(self.flow_generator.emitter_positions)):
             if is_outline[i] or sample_step == 0: # is_outline[i] or 
@@ -333,19 +352,82 @@ class MyExtension(omni.ext.IExt):
 
         print("time elapse:", time.time() - begin)
 
-        # # move flow to the correct position
-        # flow_root_prim = stage.GetPrimAtPath(flow_prim_path_str)
-        # font_prim_pos = font_prim.GetAttribute("xformOp:translate").Get()
-        # flow_root_prim.GetAttribute("xformOp:translate").Set(font_prim_pos)
+        # move flow to the correct position
+        mat = omni.usd.utils.get_world_transform_matrix(font_prim) 
+        new_mat = Gf.Matrix4d().SetScale(1.0) * Gf.Matrix4d().SetRotate(mat.ExtractRotation()) * Gf.Matrix4d().SetTranslate(mat.ExtractTranslation())
+        print("new_mat", new_mat)
+        omni.kit.commands.execute(
+            "TransformPrimCommand",
+            path=flow_prim_path_str, 
+            new_transform_matrix=new_mat,
+        ) 
+
+        # select prim
+        selection = omni.usd.get_context().get_selection()
+        selection.clear_selected_prim_paths()
+        selection.set_prim_path_selected(flow_prim_path_str, True, True, True, True)
 
     def generateFluid(self):
-        print("generateFluid")
+        """
+        Generate fluid for 3D text
+        """
+        stage = omni.usd.get_context().get_stage()
 
-        grid_points = self.mesh_generator.getGridPointsInside(grid_size = 40)
+        # select the correct font prim
+        font_prim = self.findFontPrim4Selection()
+        input_text = font_prim.GetAttribute("font:input_text").Get()
+        font_prim_path_str = font_prim.GetPath().pathString
+
+        # create xform as root
+        fluid_prim_path_str = omni.usd.get_stage_next_free_path(stage, f"{font_prim_path_str}_Fluid", False)
+
+        # omni.kit.commands.execute(
+        #             "CreatePrim",
+        #             prim_path=flow_prim_path_str,
+        #             prim_type="Xform", # Xform
+        #             select_new_prim=False,
+        #         ) 
+
+        # mesh generator
+        self.mesh_generator = self.mesh_generator_cache[input_text]
+        
+        # property
+        fluid_offset = self.fluid_offset_ui.model.get_value_as_int()
+        fluid_radius = self.fluid_radius_ui.model.get_value_as_int()
+
+        grid_points = self.mesh_generator.getGridPointsInside(grid_size = fluid_offset)
         print("grid_points", len(grid_points), grid_points)
 
-        self.fluid_generator = FluidGenerator()
-        self.fluid_generator.setPartclePositions(grid_points, radius=3.0)
+        self.fluid_generator = FluidGenerator(fluid_path_root=fluid_prim_path_str)
+        self.fluid_generator.setPartclePositions(grid_points, radius=fluid_radius)
+
+        # physcial scene
+        self.set_up_physical_scene()
+
+        # move fluid to the correct position
+        mat = omni.usd.utils.get_world_transform_matrix(font_prim) 
+        new_mat = Gf.Matrix4d().SetScale(1.0) * Gf.Matrix4d().SetRotate(mat.ExtractRotation()) * Gf.Matrix4d().SetTranslate(mat.ExtractTranslation())
+        print("new_mat", new_mat)
+        omni.kit.commands.execute(
+            "TransformPrimCommand",
+            path=fluid_prim_path_str, 
+            new_transform_matrix=new_mat,
+        ) 
+
+        # select prim
+        selection = omni.usd.get_context().get_selection()
+        selection.clear_selected_prim_paths()
+        selection.set_prim_path_selected(fluid_prim_path_str, True, True, True, True)
+
+        # change color
+        fluid_colors = [float(s) for s in self.fluid_color_ui.get_color_stringfield().split(",")]
+        fluid_color_vec = Gf.Vec3f(*fluid_colors)
+        
+        shader = UsdShade.Shader.Get(self.stage, Sdf.Path(self.fluid_generator.particle_material_path + "/Shader"))
+        # shader.CreateInput("diffuse_color_constant", Sdf.ValueTypeNames.Color3f)
+        # shader.GetPrim().HasAttribute("inputs:specularTransmissionColor")
+        shader.GetInput("specular_transmission_color").Set(fluid_color_vec)
+
 
     def generateDeformbable(self):
         """
@@ -357,14 +439,22 @@ class MyExtension(omni.ext.IExt):
         input_text = font_prim.GetAttribute("font:input_text").Get()
         
         if len(input_text) > 1:
+            dialog = MessageDialog(
+                message=f"More than one char selected. \n This may cause unexpected results for deformable body. \n Please input one char at one time.",
+                disable_cancel_button=True,
+                ok_handler=lambda dialog: dialog.hide()
+            )
+            dialog.show()
             carb.log_error("More than one char may cause unexpected results for deformable body. Please input one char at one time.")
-            
+            return 
 
         self.stage = omni.usd.get_context().get_stage()
         self.deformable_generator = DeformableBodyGenerator()
 
         deformable_resolution = self.deformable_resolution_ui.model.get_value_as_int()
         self.deformable_generator.setDeformableBodyToPrim(font_prim, deformable_resolution)
+
+        
 
     ######################################## utils ######################################
     def findFontPrim4Selection(self):
@@ -397,10 +487,40 @@ class MyExtension(omni.ext.IExt):
         return font_prim
 
     def set_flow_type(self, flow_type):
+        """
+        Set up flow type
+        """
         self.flow_type = flow_type
+
+    def set_up_physical_scene(self, gravityMagnitude = 981):
+        # Physics scene
+        # _gravityMagnitude = PARTICLE_PROPERTY._gravityMagnitude  # IN CM/s2 - use a lower gravity to avoid fluid compression at 60 FPS
+        _gravityDirection = Gf.Vec3f(0.0, -1.0, 0.0)
+        physicsScenePath = Sdf.Path("/World").AppendChild("physicsScene")
+        if self.stage.GetPrimAtPath("/World/physicsScene"):
+            scene = UsdPhysics.Scene.Get(self.stage, physicsScenePath)
+        else:
+            scene = UsdPhysics.Scene.Define(self.stage, physicsScenePath)
+        scene.CreateGravityDirectionAttr().Set(_gravityDirection)
+        scene.CreateGravityMagnitudeAttr().Set(gravityMagnitude)
+        physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
+        # physxSceneAPI.CreateEnableCCDAttr().Set(True)
+        # physxSceneAPI.GetTimeStepsPerSecondAttr().Set(60)
+        # physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(True)
+        # physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
+    
 
     ###################################### debug ######################################
     def debug(self):
         print("debug")
-        url = "FireEffect"
-        omni.kit.commands.execute("FlowCreatePreset", path="/World/Flow", layer=1, menu_item=url)
+        # url = "FireEffect"
+        # omni.kit.commands.execute("FlowCreatePreset", path="/World/Flow", layer=1, menu_item=url)
+        self.stage = omni.usd.get_context().get_stage()
+        self.particle_material_path = "/World/Looks/OmniSurface_DeepWater"
+        
+        shader = UsdShade.Shader.Get(self.stage, Sdf.Path(self.particle_material_path + "/Shader"))
+        # shader.CreateInput("diffuse_color_constant", Sdf.ValueTypeNames.Color3f)
+        # shader.GetPrim().HasAttribute("inputs:specularTransmissionColor")
+        shader.GetInput("specular_transmission_color").Set(Gf.Vec3f(0))
+        print("color: ", shader, shader.GetInput("specular_transmission_color").Get() ) # "diffuse_color_constant"
+   

@@ -1,19 +1,21 @@
 import omni
 import carb
 
-from pxr import Gf, UsdPhysics, Sdf, Usd, UsdGeom, PhysxSchema, Vt
+from pxr import Gf, UsdPhysics, Sdf, Usd, UsdGeom, PhysxSchema, Vt, UsdShade
 from omni.physx.scripts import utils, physicsUtils, particleUtils
 
 from .param import PARTICLE_PROPERTY
 
 class FluidGenerator():
-    def __init__(self, flow_type = "Water", layer = 1) -> None:
+    def __init__(self, fluid_path_root = "/World/fluid3d", flow_type = "Water", layer = 1) -> None:
         self.particle_positions = []
         self.flow_type = flow_type
         self.layer = layer
+        self.fluid_path_root = fluid_path_root
 
         # stage
         self.stage = omni.usd.get_context().get_stage()
+        PARTICLE_PROPERTY.set_partical_properties()
 
         # gpu
         self.enable_gpu()
@@ -24,6 +26,9 @@ class FluidGenerator():
         physx = acquire_physx_interface()
         physx.overwrite_gpu_setting(1)
         physx.reset_simulation()
+
+
+
 
     def setPartclePositions(self, points, scale = 10, radius = 3.0, max_velocity = 50.0):
         """
@@ -48,23 +53,25 @@ class FluidGenerator():
         # fluid physical scene
         self.set_up_fluid_physical_scene() 
 
-        #
+        # fluid root
         particleSystemStr =  "/World/Fluid" # game_prim.GetPath().AppendPath("Fluid").pathString
         self.particleSystemPath = Sdf.Path(particleSystemStr)
-        self.particleInstanceStr = "/World/Particles" # game_prim.GetPath().AppendPath("Particles").pathString
+        self.particleInstanceStr = f"{self.fluid_path_root}" # game_prim.GetPath().AppendPath("Particles").pathString
 
         # particle system
         self._fluidSphereDiameter = PARTICLE_PROPERTY._fluidSphereDiameter
         self._particleSystemSchemaParameters = PARTICLE_PROPERTY._particleSystemSchemaParameters
         self._particleSystemAttributes = PARTICLE_PROPERTY._particleSystemAttributes
 
-        self._particleSystem = particleUtils.add_physx_particle_system(
-                self.stage, self.particleSystemPath, **self._particleSystemSchemaParameters, simulation_owner=Sdf.Path(self.physicsScenePath.pathString)
-            )
+        if not self.stage.GetPrimAtPath(self.particleSystemPath):
+            self._particleSystem = particleUtils.add_physx_particle_system(
+                    self.stage, self.particleSystemPath, **self._particleSystemSchemaParameters, simulation_owner=Sdf.Path(self.physicsScenePath.pathString)
+                )
+        else:
+            self._particleSystem = PhysxSchema.PhysxParticleSystem.Get(self.stage, self.particleSystemPath)
+        
 
-        particleSystem = self.stage.GetPrimAtPath(self.particleSystemPath)
         particleInstancePath = Sdf.Path(self.particleInstanceStr)
-
         # paricle instance
         positions_list = [Gf.Vec3f(*p) for p in self.particle_positions]
         velocities_list = [Gf.Vec3f(0, 0, 0) for _ in range(len(self.particle_positions))]
@@ -99,7 +106,7 @@ class FluidGenerator():
         particlePrototype0_sphere.CreateRadiusAttr(radius)
 
         # debug
-        print("sphere_extent_attr", sphere_extent_attr)
+        # print("sphere_extent_attr", sphere_extent_attr)
         # print("positions_list", len(positions_list), positions_list[:5])
 
 
@@ -123,22 +130,8 @@ class FluidGenerator():
         self.particleSystemPath = Sdf.Path(particleSystemStr)
         self.particleInstanceStr = default_prim_path.AppendPath("Particles").pathString
         
+        return 
 
-        # Physics scene
-        self._gravityMagnitude = PARTICLE_PROPERTY._gravityMagnitude  # IN CM/s2 - use a lower gravity to avoid fluid compression at 60 FPS
-        self._gravityDirection = Gf.Vec3f(0.0, -1.0, 0.0)
-        physicsScenePath = default_prim_path.AppendChild("physicsScene")
-        if self.stage.GetPrimAtPath("/World/physicsScene"):
-            scene = UsdPhysics.Scene.Get(self.stage, physicsScenePath)
-        else:
-            scene = UsdPhysics.Scene.Define(self.stage, physicsScenePath)
-        scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
-        scene.CreateGravityMagnitudeAttr().Set(self._gravityMagnitude)
-        physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
-        physxSceneAPI.CreateEnableCCDAttr().Set(True)
-        physxSceneAPI.GetTimeStepsPerSecondAttr().Set(60)
-        physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(True)
-        physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
 
     def enable_isosurface(self, max_velocity = 50.0):
         print("isosurface settings")
@@ -150,24 +143,24 @@ class FluidGenerator():
             mdl_name="OmniSurfacePresets.mdl",
             mtl_name="OmniSurface_DeepWater",
             mtl_created_list=mtl_created,
+            select_new_prim=False,
         )
-        pbd_particle_material_path = mtl_created[0]
+        self.particle_material_path = mtl_created[0]
         omni.kit.commands.execute(
-            "BindMaterial", prim_path=self.particleSystemPath, material_path=pbd_particle_material_path
-        )
-
+            "BindMaterial", prim_path=self.particleSystemPath, material_path=self.particle_material_path
+        )     
         
 
         # Create a pbd particle material and set it on the particle system
         particleUtils.add_pbd_particle_material(
             self.stage,
-            pbd_particle_material_path,
+            self.particle_material_path,
             cohesion=0.01,
             viscosity=0.0091,
             surface_tension=0.0074,
             friction=0.1,
         )
-        physicsUtils.add_physics_material_to_prim(self.stage, particle_system.GetPrim(), pbd_particle_material_path)
+        physicsUtils.add_physics_material_to_prim(self.stage, particle_system.GetPrim(), self.particle_material_path)
 
         # max velocity
         particle_system.CreateMaxVelocityAttr().Set(max_velocity)
@@ -205,6 +198,12 @@ class FluidGenerator():
         primVarsApi.CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool).Set(True)
 
         self.stage.SetInterpolationType(Usd.InterpolationTypeHeld)
+
+        # move material path
+        # new_material_path_str = self.fluid_path_root + "/Looks/" + pbd_particle_material_path.split("/")[-1]
+        # omni.kit.commands.execute(
+        #     "MovePrim", path_from=pbd_particle_material_path, path_to=new_material_path_str
+        # )
 
     def shutdown(self):
         self.particle_positions = None
