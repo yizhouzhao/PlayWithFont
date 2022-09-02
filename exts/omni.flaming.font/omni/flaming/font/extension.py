@@ -80,6 +80,7 @@ class MyExtension(omni.ext.IExt):
             self._window.frame.style = julia_modeler_style
             with ui.ScrollingFrame():
                 with ui.VStack():
+                    ui.Button("Debug", clicked_fn = self.debug)
                     with ui.CollapsableFrame("CREATE FONT"):
                         with ui.VStack(height=0, spacing=4):
                             ui.Line(style_type_name_override="HeaderLine")
@@ -288,8 +289,8 @@ class MyExtension(omni.ext.IExt):
         self.mesh_generator = self.mesh_generator_cache[input_text]
 
         # flow generator
-        if not self.flow_generator:
-            self.flow_generator = FlowGenerator()
+        # if not self.flow_generator:
+        self.flow_generator = FlowGenerator()
         
         # set flow type
         self.flow_generator.set_flow_type(self.flow_type)
@@ -397,3 +398,9 @@ class MyExtension(omni.ext.IExt):
 
     def set_flow_type(self, flow_type):
         self.flow_type = flow_type
+
+    ###################################### debug ######################################
+    def debug(self):
+        print("debug")
+        url = "FireEffect"
+        omni.kit.commands.execute("FlowCreatePreset", path="/World/Flow", layer=1, menu_item=url)

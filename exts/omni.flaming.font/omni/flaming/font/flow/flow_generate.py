@@ -5,10 +5,10 @@ from pxr import Sdf, Gf, UsdGeom
 from .param import FLOW_CONFIG
 
 class FlowGenerator():
-    def __init__(self, layer = 1) -> None:
+    def __init__(self) -> None:
         self.emitter_positions = []
         self.flow_type = "Fire"
-        self.layer = layer
+        self.layer = 1
 
         # stage
         self.stage = omni.usd.get_context().get_stage()
@@ -19,6 +19,7 @@ class FlowGenerator():
     def set_flow_type(self, flow_type = "Fire"):
         self.flow_type = flow_type
         self.flow_config = FLOW_CONFIG[self.flow_type]
+        self.layer = self.flow_config["layer"]
 
     def _enable_flowusd_api(self, target_blocks = 32768):
         """
