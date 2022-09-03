@@ -403,7 +403,7 @@ class CustomStringField(CustomBaseWidget):
 
     def _build_body(self):
         with ui.HStack():
-            string_ui = ui.StringField(height = 20, width = 100)
+            string_ui = ui.StringField(height = 20, width = 50)
 
         self.model = string_ui.model
         self.model.set_value("Q")

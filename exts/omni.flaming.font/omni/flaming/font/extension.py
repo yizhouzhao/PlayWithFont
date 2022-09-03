@@ -83,8 +83,8 @@ class MyExtension(omni.ext.IExt):
         with self._window.frame:
             self._window.frame.style = julia_modeler_style
             with ui.ScrollingFrame():
-                with ui.VStack():
-                    ui.Button("Debug", clicked_fn = self.debug)
+                with ui.VStack(height=0):
+                    # ui.Button("Debug", clicked_fn = self.debug)
                     with ui.CollapsableFrame("CREATE FONT"):
                         with ui.VStack(height=0, spacing=4):
                             ui.Line(style_type_name_override="HeaderLine")
@@ -116,9 +116,9 @@ class MyExtension(omni.ext.IExt):
                                     self.flow_density_ui = CustomSliderWidget(min=0.01, max=0.99, num_type = "float", label="Flow density:", default_val=0.2, 
                                         tooltip = "Flow emitter density")
                              
-                                    self.flow_radius_ui = CustomSliderWidget(min=1.0, max=20, num_type = "float", label="Flow radius:", default_val=5.0, 
+                                    self.flow_radius_ui = CustomSliderWidget(min=1.0, max=10, num_type = "float", label="Flow radius:", default_val=5.0, 
                                         tooltip = "Flow emitter size.")
-                                    self.flow_coolingrate_ui = CustomSliderWidget(min=0.0, max=5.0, num_type = "float", label="Cooling rate:", default_val=1.5, 
+                                    self.flow_coolingrate_ui = CustomSliderWidget(min=0.0, max=2.0, num_type = "float", label="Cooling rate:", default_val=1.5, 
                                         tooltip = "Advection cooling rate.")
                       
                                     ui.Button("Generate Flow", clicked_fn=self.generateFlow, height = 40, 
@@ -144,16 +144,14 @@ class MyExtension(omni.ext.IExt):
                                 with ui.VStack(height=0, spacing=4):
                                     ui.Line(style_type_name_override="HeaderLine")
                                     ui.Spacer(height = 2)
-                                    self.deformable_resolution_ui = CustomSliderWidget(min=5, max=20, label="Deformable resolution:", default_val=15, 
+                                    self.deformable_resolution_ui = CustomSliderWidget(min=5, max=20, label="Resolution:", default_val=15, 
                                             tooltip = "Resolution for the deformable body. Larger resolution results in more partitions.")
                                     ui.Button("Generate Deformable Body", height = 40, 
                                         style = {"background_color": "DarkSlateGray"}, name = "load_button", clicked_fn=self.generateDeformbable)
                             
-                            ui.Spacer(height = 20)
-                            ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
+                            # ui.Spacer(height = 20)
+                            # ui.Button("Add 3D Model", clicked_fn=self.addFont3DModel)
 
-                    ui.Spacer(height = 10)
-                    ui.Line(style_type_name_override="HeaderLine")
                     with ui.CollapsableFrame("SCENE UTILITY"):
                         with ui.VStack(height=0, spacing=4):
                             ui.Line(style_type_name_override="HeaderLine")
@@ -161,10 +159,12 @@ class MyExtension(omni.ext.IExt):
                             # open a new stage
                             ui.Button("New scene", height = 40, name = "load_button", clicked_fn=lambda : omni.kit.window.file.new(), style={ "margin": 4}, tooltip = "open a new empty stage")
                             # ground plan
-                            ui.Line(style={"color":"gray", "margin_height": 8, "margin_width": 20})
+                            ui.Line(style={"color":"gray", "margin_height": 2, "margin_width": 20})
                             self.ground_color_ui = CustomColorWidget(0.5, 0.5, 0.5, label="Ground color:")
                             ui.Button("Add/Remove ground plane", height = 40, name = "load_button", clicked_fn=self.toggle_ground_plane, style={ "margin": 4}, tooltip = "Add or remove the ground plane")
-                         
+
+                            self.gravity_mangitude_ui = CustomSliderWidget(min=0, max=1000, num_type = "int", label="Gravity magnitude:", default_val=981, 
+                                        tooltip = "Gravity cm/s^2", on_slide_fn=self.set_up_physical_scene)
                             # light intensity
                             ui.Line(style={"color":"gray", "margin_height": 8, "margin_width": 20})
                             CustomSliderWidget(min=0, max=3000, label="Light intensity:", default_val=1000, on_slide_fn = self.change_light_intensity)
