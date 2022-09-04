@@ -166,7 +166,7 @@ class FluidGenerator():
 
             omni.kit.commands.execute('ChangeProperty',
                 prop_path=Sdf.Path(f'{self.particle_material_path}/Shader.inputs:specular_transmission_scattering_color'),
-                value=color / 1.5,
+                value=color / 1.2,
                 prev=Gf.Vec3f(1.0, 1.0, 1.0)
                 )
 

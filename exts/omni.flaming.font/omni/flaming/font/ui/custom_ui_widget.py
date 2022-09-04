@@ -406,7 +406,7 @@ class CustomStringField(CustomBaseWidget):
             string_ui = ui.StringField(height = 20, width = 50)
 
         self.model = string_ui.model
-        self.model.set_value("Q")
+        self.model.set_value("A")
 
     def _build_tail(self):
         return 

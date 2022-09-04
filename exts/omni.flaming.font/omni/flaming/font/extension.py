@@ -2,14 +2,17 @@ import os
 import time
 import asyncio
 
+#　omni import 
 import omni
 import omni.ext
 import omni.ui as ui
 from omni.physx.scripts import physicsUtils
 
+import carb
+
+# usd import
 from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, PhysxSchema, UsdShade
 
-import carb
 
 
 
@@ -90,7 +93,7 @@ class MyExtension(omni.ext.IExt):
                             ui.Line(style_type_name_override="HeaderLine")
                             ui.Spacer(height = 2)
                             
-                            self.input_text_ui = CustomStringField("Input text:")
+                            self.input_text_ui = CustomStringField("Input text:") 
                             self.font_type_ui = CustomComboboxWidget(label="Font type:", options=FONT_TYPES)
                             self.font_height_ui = CustomSliderWidget(min=10, max=100, label="Font size:", default_val=52,
                                 tooltip = "Font 3D text model size.")
@@ -156,11 +159,13 @@ class MyExtension(omni.ext.IExt):
                         with ui.VStack(height=0, spacing=4):
                             ui.Line(style_type_name_override="HeaderLine")
 
+                            # eco mode
+                            CustomBoolWidget(label ="Eco mode:", default_value=False, tooltip = "Turn on/off eco mode in the render setting.", on_checked_fn = self.toggle_eco_mode)
                             # open a new stage
-                            ui.Button("New scene", height = 40, name = "load_button", clicked_fn=lambda : omni.kit.window.file.new(), style={ "margin": 4}, tooltip = "open a new empty stage")
+                            ui.Button("New scene", height = 40, name = "load_button", clicked_fn=self.new_scene, style={ "margin": 4}, tooltip = "open a new empty stage")
                             # ground plan
                             ui.Line(style={"color":"gray", "margin_height": 2, "margin_width": 20})
-                            self.ground_color_ui = CustomColorWidget(0.5, 0.5, 0.5, label="Ground color:")
+                            self.ground_color_ui = CustomColorWidget(0.86, 0.626, 0.273, label="Ground color:")
                             ui.Button("Add/Remove ground plane", height = 40, name = "load_button", clicked_fn=self.toggle_ground_plane, style={ "margin": 4}, tooltip = "Add or remove the ground plane")
 
                             self.gravity_mangitude_ui = CustomSliderWidget(min=0, max=1000, num_type = "int", label="Gravity magnitude:", default_val=981, 
@@ -168,8 +173,40 @@ class MyExtension(omni.ext.IExt):
                             # light intensity
                             ui.Line(style={"color":"gray", "margin_height": 8, "margin_width": 20})
                             CustomSliderWidget(min=0, max=3000, label="Light intensity:", default_val=1000, on_slide_fn = self.change_light_intensity)
-                            
+
+                    # PATH group
+                    ui.Spacer(height = 10)
+                    ui.Line(style_type_name_override="HeaderLine")
+                    with ui.CollapsableFrame("PATH", collapsed = True):
+                        with ui.VStack(height=0, spacing=0):
+                            ui.Line(style_type_name_override="HeaderLine") 
+                            ui.Spacer(height = 12)
+
+                            CustomPathButtonWidget(label="Font folder:", path=os.path.join(EXTENSION_ROOT, "fonts"))
+                            CustomPathButtonWidget(label="Model folder:", path=os.path.join(EXTENSION_ROOT, "model"))
+         
     ####################### scene utility #################################################
+
+    def new_scene(self):
+        """
+        Start a new scene
+        """
+        # clear memory
+        self.on_shutdown() 
+
+        # new scene
+        omni.kit.window.file.new()
+
+        # ecologist.
+        #     
+    
+    def toggle_eco_mode(self, eco_mode = True):
+        """
+        Turn on/off eco mode when rendering
+        """
+        omni.kit.commands.execute("ChangeSetting", path="/rtx/ecoMode/enabled", value=eco_mode)
+
+
 
     def toggle_ground_plane(self):
         """
@@ -180,8 +217,13 @@ class MyExtension(omni.ext.IExt):
         if not ground_prim:
             # ground_colors = [float(s) for s in self.ground_color_ui.get_color_stringfield().split(",")]
             # ground_color_vec = Gf.Vec3f(*ground_colors)
-            physicsUtils.add_ground_plane(stage, "/World/groundPlane", "Y", 750.0, Gf.Vec3f(0.0), Gf.Vec3f(0.3))
+            physicsUtils.add_ground_plane(stage, "/World/groundPlane", "Y", 1000, Gf.Vec3f(0.0), Gf.Vec3f(0.3))
             self.change_ground_color()
+            
+            # select ground
+            selection = omni.usd.get_context().get_selection()
+            selection.clear_selected_prim_paths()
+            selection.set_prim_path_selected("/World/groundPlane", True, True, True, True)
         else:
             omni.kit.commands.execute("DeletePrims", paths=["/World/groundPlane"])
 
@@ -218,7 +260,7 @@ class MyExtension(omni.ext.IExt):
 
 
     def on_shutdown(self):
-        print("[omni.flaming.font] omni.flaming.font shutdown")
+        print("[omni.flaming.font] omni.flaming.font clear memory")
 
         if self.fluid_generator:
             self.fluid_generator.shutdown()
@@ -227,12 +269,13 @@ class MyExtension(omni.ext.IExt):
             self.flow_generator.shutdown()
         
         # if self.mesh_generator: 
-        #     self.mesh_generator.shutdown()
+        #     self.mesh_generator.shutdown() 
 
         for key, mg in self.mesh_generator_cache.items():
             mg.shutdown()
 
-        del self.mesh_generator_cache
+        # del self.mesh_generator_cache
+        self.mesh_generator = None
 
     def generateFont(self):
         """
@@ -368,6 +411,14 @@ class MyExtension(omni.ext.IExt):
         selection.clear_selected_prim_paths()
         selection.set_prim_path_selected(flow_prim_path_str, True, True, True, True)
 
+        # show notification
+        dialog = MessageDialog(
+            message=f"Fluid effect generated for {font_prim.GetPath().pathString} \n Click `Play` to show effect.",
+            disable_cancel_button=True,
+            ok_handler=lambda dialog: dialog.hide()
+        )
+        dialog.show()
+
     def generateFluid(self):
         """
         Generate fluid for 3D text
@@ -421,6 +472,14 @@ class MyExtension(omni.ext.IExt):
         selection = omni.usd.get_context().get_selection()
         selection.clear_selected_prim_paths()
         selection.set_prim_path_selected(fluid_prim_path_str, True, True, True, True)
+
+        # show notification
+        dialog = MessageDialog(
+            message=f"Fluid effect generated for {font_prim.GetPath().pathString}",
+            disable_cancel_button=True,
+            ok_handler=lambda dialog: dialog.hide()
+        )
+        dialog.show()
     
 
     def generateDeformbable(self):
@@ -447,7 +506,14 @@ class MyExtension(omni.ext.IExt):
 
         deformable_resolution = self.deformable_resolution_ui.model.get_value_as_int()
         self.deformable_generator.setDeformableBodyToPrim(font_prim, deformable_resolution)
-
+        
+        # show notification
+        dialog = MessageDialog(
+            message=f"Deformable body generated for {font_prim.GetPath().pathString}",
+            disable_cancel_button=True,
+            ok_handler=lambda dialog: dialog.hide()
+        )
+        dialog.show()
         
 
     ######################################## utils ######################################
@@ -455,6 +521,15 @@ class MyExtension(omni.ext.IExt):
         """
         Find the root font prim from selection
         """
+
+        def build_error_dialog():
+            dialog = MessageDialog(
+                message=f"Please select only one font mesh.",
+                disable_cancel_button=True,
+                ok_handler=lambda dialog: dialog.hide()
+            )
+            dialog.show()
+
         self.stage = omni.usd.get_context().get_stage()
         font_prim = None
 
@@ -463,6 +538,7 @@ class MyExtension(omni.ext.IExt):
             paths = selection.get_selected_prim_paths()
 
             if len(paths) != 1:
+                build_error_dialog()
                 raise Exception("Please select only one font mesh.")
 
             prim = self.stage.GetPrimAtPath(paths[0])
@@ -473,9 +549,11 @@ class MyExtension(omni.ext.IExt):
                 prim = prim.GetParent()
             
         else:
+            build_error_dialog()
             raise Exception("Please select one font mesh.")
 
         if not font_prim:
+            build_error_dialog()
             raise Exception("No 3D font selected.")
 
         return font_prim
