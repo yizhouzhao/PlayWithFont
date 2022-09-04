@@ -163,10 +163,13 @@ class FluidGenerator():
                 )
 
             await omni.kit.app.get_app().next_update_async()
+            selection = omni.usd.get_context().get_selection()
+            selection.set_selected_prim_paths([f"{self.particle_material_path}/Shader"], False)
+            await omni.kit.app.get_app().next_update_async()
 
             omni.kit.commands.execute('ChangeProperty',
                 prop_path=Sdf.Path(f'{self.particle_material_path}/Shader.inputs:specular_transmission_scattering_color'),
-                value=color / 1.2,
+                value=color / 1.35,
                 prev=Gf.Vec3f(1.0, 1.0, 1.0)
                 )
 
@@ -224,7 +227,12 @@ class FluidGenerator():
             primVarsApi = UsdGeom.PrimvarsAPI(particle_system)
             primVarsApi.CreatePrimvar("doNotCastShadows", Sdf.ValueTypeNames.Bool).Set(True)
 
-            self.stage.SetInterpolationType(Usd.InterpolationTypeHeld)
+            self.stage.SetInterpolationType(Usd.InterpolationTypeHeld)            
+
+            # select prim
+            selection = omni.usd.get_context().get_selection()
+            selection.clear_selected_prim_paths()
+            selection.set_prim_path_selected(self.fluid_path_root, True, True, True, True)
 
         asyncio.ensure_future(enable_isosurface_async())
 
