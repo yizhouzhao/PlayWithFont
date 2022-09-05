@@ -3,8 +3,13 @@
 version = "1.0.0"
 
 # The title and description fields are primarily for displaying extension info in UI
-title = "Simple UI Extension Template"
-description="The simplest python extension example. Use it as a starting point for your extensions."
+title = "FlamingFont"
+description="The simplest python to create 3D text with effects."
+
+
+# preview
+preview_image = "icons/preview.png"
+icon = "icons/title.png"
 
 # Path (relative to the root) or content of readme markdown file for UI.
 readme  = "docs/README.md"
