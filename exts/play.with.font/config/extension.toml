@@ -3,7 +3,7 @@
 version = "1.0.0"
 
 # The title and description fields are primarily for displaying extension info in UI
-title = "FlamingFont"
+title = "PlayWithFont"
 description="The simplest python to create 3D text with effects."
 
 
@@ -28,6 +28,6 @@ keywords = ["kit", "example"]
 [dependencies]
 "omni.kit.uiapp" = {}
 
-# Main python module this extension provides, it will be publicly available as "import omni.flaming.font".
+# Main python module this extension provides, it will be publicly available as "import play.with.font".
 [[python.module]]
-name = "omni.flaming.font"
+name = "play.with.font"

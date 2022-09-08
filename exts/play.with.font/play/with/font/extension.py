@@ -58,7 +58,7 @@ class MyExtension(omni.ext.IExt):
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
     def on_startup(self, ext_id):
-        print("[omni.flaming.font] MyExtension startup")
+        print("[play.with.font] MyExtension startup")
 
         # enable flow in rendering
         omni.kit.commands.execute("ChangeSetting", path="rtx/flow/enabled", value=True)
@@ -82,7 +82,7 @@ class MyExtension(omni.ext.IExt):
     def build_setup_layout_window(self):
         # window
         
-        self._window = ui.Window("omni.flaming.font", width=300)
+        self._window = ui.Window("play.with.font", width=300)
         with self._window.frame:
             self._window.frame.style = julia_modeler_style
             with ui.ScrollingFrame():
@@ -260,7 +260,7 @@ class MyExtension(omni.ext.IExt):
 
 
     def on_shutdown(self):
-        print("[omni.flaming.font] omni.flaming.font clear memory")
+        print("[play.with.font] play.with.font clear memory")
 
         if self.fluid_generator:
             self.fluid_generator.shutdown()
