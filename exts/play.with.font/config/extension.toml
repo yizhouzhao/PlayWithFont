@@ -31,3 +31,12 @@ keywords = ["kit", "example"]
 # Main python module this extension provides, it will be publicly available as "import play.with.font".
 [[python.module]]
 name = "play.with.font"
+
+[python.pipapi]
+use_online_index = true
+
+# Use this to specify a list of additional repositories if your pip package is hosted somewhere other
+# than the default repo(s) configured in pip. Will pass these to pip with "--extra-index-url" argument
+repositories = ["https://my.additional.pip_repo.com/"]
+
+requirements = ["shapely", "freetype-py", "triangle"]

@@ -14,10 +14,9 @@ import carb
 from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, PhysxSchema, UsdShade
 
 
-
-
-
 ################################ pip install dependencies ####################################
+################################## this is already down in extension.toml, double check ######
+
 try:
     import shapely
 except:
@@ -71,10 +70,6 @@ class MyExtension(omni.ext.IExt):
         self.flow_generator = None
 
         self.fluid_generator = None
-
-        # stage
-        self.stage = omni.usd.get_context().get_stage()
-        UsdGeom.SetStageUpAxis(self.stage, UsdGeom.Tokens.y)
         
         # build windows
         self.build_setup_layout_window()
@@ -137,7 +132,7 @@ class MyExtension(omni.ext.IExt):
                                         tooltip = "Fluid particle offset. Higher value results in lower density.")
                                     self.fluid_radius_ui = CustomSliderWidget(min=1, max=10, label="Particle radius:", default_val=5,
                                         tooltip = "Fluid particle size.")
-                                    self.fluid_color_ui = CustomColorWidget(0.774, 0.94, 1.0, label="Ground color:")
+                                    self.fluid_color_ui = CustomColorWidget(0.774, 0.94, 1.0, label="Fluid color:")
                        
 
                                     ui.Button("Generate Fluid", clicked_fn=self.generateFluid, height = 40, 

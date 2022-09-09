@@ -46,6 +46,8 @@ class MeshGenerator():
         for c in self.text:
             self.AddCharacter(c, create_obj=create_obj)
 
+        self.face = None
+
     def saveMesh(self, mesh_file = "test0.obj"):
         self.mesh.saveOBJ(mesh_file)
         print("OBJ mesh save to path:", mesh_file)
