@@ -1,5 +1,8 @@
 # Play With Font
 
+> **Warning**
+> It takes about one minute to first load this extension because of the pip installation for dependencies.
+
 
 ![teaser](img/playwithfont_t.gif)
 
