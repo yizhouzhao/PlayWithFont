@@ -16,7 +16,7 @@ This repository is inspired by [codetigerFont23D](https://github.com/codetiger/F
 </div>
 
 
-3D fonts provide a visual depth. Together with Omniverse, 3D fonts can shine with wonderful effect. Use our 3D font generator to make your own designs, with flow (fire, frog, dust), fluid, rigid body and deformable body.
+3D fonts provide a visual depth. Together with Omniverse, 3D fonts can shine with wonderful effect. Use our 3D font generator to make your own designs, with flow (fire, frog, dust), fluid, rigid body and deformable body. [Introduction video here](https://drive.google.com/file/d/1a1UgZ7u4xnhO4gO6bWf95Gn8Do6B8YjK/view?usp=sharing)
 
 ![teaser](img/title.PNG)
 
